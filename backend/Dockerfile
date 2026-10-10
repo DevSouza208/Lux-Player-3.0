@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir -r requirements.deploy.txt
 COPY models ./models
 COPY routers ./routers
 COPY standalone.py ./standalone.py
+COPY outbound_guard.py ./outbound_guard.py
 
 EXPOSE 10000
-CMD ["sh", "-c", "exec uvicorn standalone:app --host 0.0.0.0 --port ${PORT:-10000} --proxy-headers"]
+CMD ["sh", "-c", "exec uvicorn standalone:app --host 0.0.0.0 --port ${PORT:-10000} --proxy-headers --no-access-log"]
