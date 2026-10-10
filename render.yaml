@@ -1,0 +1,15 @@
+# Render Blueprint: independent FastAPI + FFmpeg API.
+# Deploy via https://dashboard.render.com/blueprints from this repository.
+services:
+  - type: web
+    name: lux-player-iptv-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /api/health
+    envVars:
+      - key: CORS_ORIGINS
+        value: https://devsouza208.github.io
+      - key: LUX_ALLOWED_HOSTS
+        sync: false
