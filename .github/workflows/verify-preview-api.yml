@@ -1,0 +1,42 @@
+name: Verify original FastAPI for Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-preview-api.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check original media and playlist API routes
+        run: |
+          set -euo pipefail
+          origin='https://playlist-streamer-10.preview.emergentagent.com'
+          for route in playlists/proxy media/proxy media/remux; do
+            status=$(curl --silent --show-error --max-time 30 -o /tmp/response.json -w '%{http_code}' "$origin/api/$route")
+            if [ "$status" != 422 ]; then
+              echo "Unexpected HTTP $status for $route (expected 422)"
+              exit 1
+            fi
+            echo "$route: FastAPI route active (HTTP 422 without parameters)"
+          done
+      - name: Verify public test HLS is served with rewritten media segments and CORS
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail-with-body --max-time 50 \
+            -D /tmp/response-headers.txt \
+            -o /tmp/test.m3u8 \
+            -H 'Origin: https://devsouza208.github.io' \
+            --get \
+            --data-urlencode 'url=https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8' \
+            'https://playlist-streamer-10.preview.emergentagent.com/api/media/proxy'
+          grep -Eq '^#EXTM3U' /tmp/test.m3u8
+          grep -Fq '/api/media/proxy?url=' /tmp/test.m3u8
+          grep -Eiq 'access-control-allow-origin: (\*|https://devsouza208.github.io)' /tmp/response-headers.txt
+          echo "Lux HLS rewrites and CORS: OK"
