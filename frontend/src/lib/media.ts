@@ -45,7 +45,7 @@ export function handleMediaImageError(event: SyntheticEvent<HTMLImageElement>) {
 /** Long-form VOD fallback for MKV/AVI/HEVC. Requires the independent API
  * to include /api/media/vod; never route live-TV MPEG-TS through here.
  */
-export const VOD_API_ORIGIN = (import.meta.env.VITE_VOD_API_ORIGIN || API_ORIGIN).trim().replace(/\\/+$/, "");
+export const VOD_API_ORIGIN = (import.meta.env.VITE_VOD_API_ORIGIN || API_ORIGIN).trim().replace(new RegExp("/+$"), "");
 
 export function mediaVodFallbackUrl(url: string): string {
   return `${VOD_API_ORIGIN}/api/media/vod?url=${encodeURIComponent(url)}`;
