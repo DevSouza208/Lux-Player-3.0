@@ -80,10 +80,30 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
       if (disposed) return;
       const maxRetries = isVod ? 1 : 2;
       if (playbackAttempt < maxRetries) {
-        setPlaybackAttempt((old) => old + 1);
+        if (isVod) {
+          // A 422 here means the route exists but requires a URL.
+          // The old Emergent preview answers 404: do not retry video endlessly.
+          void fetch(`${API_BASE}/media/vod`)
+            .then((response) => {
+              if (disposed) return;
+              if (response.status === 404) {
+                setPlaybackError("Este episódio precisa de conversão de formato. A rota FFmpeg para filmes e séries ainda não foi ativada no backend.");
+                setPlaybackState("error");
+              } else {
+                setPlaybackAttempt((old) => old + 1);
+              }
+            })
+            .catch(() => {
+              if (disposed) return;
+              setPlaybackError("Não foi possível acessar a conversão de vídeo do servidor.");
+              setPlaybackState("error");
+            });
+        } else {
+          setPlaybackAttempt((old) => old + 1);
+        }
       } else {
         setPlaybackError(isVod
-          ? `${reason} Se o episódio estiver em MKV/HEVC, o servidor precisa da rota de conversão VOD.`
+          ? `${reason} Verifique se o servidor consegue converter este episódio para H.264/AAC.`
           : reason);
         setPlaybackState("error");
       }
