@@ -14,6 +14,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from routers.playlists import router as playlists_router
 from routers.media import router as media_router
+from routers.vod import router as vod_router
 
 app = FastAPI(title="Lux Player IPTV API", version="3.0", docs_url=None, redoc_url=None)
 
@@ -74,6 +75,7 @@ async def require_allowed_source(request: Request) -> None:
 
 app.include_router(playlists_router, prefix="/api", dependencies=[Depends(require_allowed_source)])
 app.include_router(media_router, prefix="/api", dependencies=[Depends(require_allowed_source)])
+app.include_router(vod_router, prefix="/api", dependencies=[Depends(require_allowed_source)])
 
 
 @app.get("/api/health", tags=["health"])
