@@ -1,5 +1,6 @@
 import asyncio
 import ipaddress
+import os
 import re
 import socket
 from contextlib import suppress
@@ -35,22 +36,23 @@ async def _validate_public_url(url: str) -> None:
         raise HTTPException(status_code=403, detail="Endereço de mídia não permitido")
 
 
-def _proxied_url(url: str) -> str:
-    return f"/api/media/proxy?url={quote(url, safe='')}"
+def _proxied_url(url: str, api_origin: str = "") -> str:
+    # Cross-origin GitHub Pages HLS clients must reach the API host directly.
+    return f"{api_origin.rstrip('/')}/api/media/proxy?url={quote(url, safe='')}"
 
 
-def _rewrite_hls(text: str, source_url: str) -> str:
+def _rewrite_hls(text: str, source_url: str, api_origin: str = "") -> str:
     rewritten: list[str] = []
     for line in text.splitlines():
         stripped = line.strip()
         if stripped.startswith("#"):
             line = re.sub(
                 r'URI="([^"]+)"',
-                lambda match: f'URI="{_proxied_url(urljoin(source_url, match.group(1)))}"',
+                lambda match: f'URI="{_proxied_url(urljoin(source_url, match.group(1)), api_origin)}"',
                 line,
             )
         elif stripped:
-            line = _proxied_url(urljoin(source_url, stripped))
+            line = _proxied_url(urljoin(source_url, stripped), api_origin)
         rewritten.append(line)
     return "\n".join(rewritten) + "\n"
 
@@ -91,7 +93,12 @@ async def proxy_media(request: Request, url: str = Query(..., min_length=8)):
         await upstream.aclose()
         await client.aclose()
         return Response(
-            content=_rewrite_hls(body, final_url),
+            content=_rewrite_hls(
+                body,
+                final_url,
+                os.getenv("LUX_API_PUBLIC_ORIGIN", "").strip().rstrip("/")
+                or str(request.base_url).rstrip("/"),
+            ),
             media_type="application/vnd.apple.mpegurl",
             headers={"Cache-Control": "no-store"},
         )
