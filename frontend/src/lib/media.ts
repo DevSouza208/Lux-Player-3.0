@@ -1,3 +1,4 @@
+import type { SyntheticEvent } from "react";
 import { API_BASE, API_ORIGIN } from "@/lib/apiOrigin";
 
 const proxyPath = (route: "proxy" | "remux", url: string) =>
@@ -25,7 +26,7 @@ export function mediaProxyUrl(url?: string | null): string | undefined {
   return parsed.toString();
 }
 
-export function handleMediaImageError(event: React.SyntheticEvent<HTMLImageElement>) {
+export function handleMediaImageError(event: SyntheticEvent<HTMLImageElement>) {
   // Prevent broken-image icons from covering the placeholder gradient.
   event.currentTarget.style.display = "none";
 }
