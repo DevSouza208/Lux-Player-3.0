@@ -1,0 +1,32 @@
+name: Test temporary M3U backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/test-m3u-gateway.yml'
+      - 'frontend/src/lib/playlistGateway.ts'
+      - 'frontend/src/components/ImportCenter.tsx'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  m3u:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify CORS and stream from public test playlist
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail-with-body --max-time 100 \
+            -D /tmp/lux-headers.txt \
+            -o /tmp/lux-test.m3u \
+            -H 'Origin: https://devsouza208.github.io' \
+            -H 'Content-Type: application/json' \
+            --data '{"url":"https://raw.githubusercontent.com/iptv-org/iptv/master/streams/br.m3u"}' \
+            'https://dntqnwiyelvnukwptosn.supabase.co/functions/v1/lux-playlist-import'
+          head -c 7 /tmp/lux-test.m3u | grep -q '^#EXTM3U'
+          grep -iq 'access-control-allow-origin: https://devsouza208.github.io' /tmp/lux-headers.txt
+          echo "Lux M3U backend streaming OK"
+          wc -c /tmp/lux-test.m3u
