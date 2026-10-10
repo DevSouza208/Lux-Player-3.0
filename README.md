@@ -49,6 +49,18 @@ Requisitos: Node.js, Yarn, Python, MongoDB e Git.
 Abra `http://localhost:3000`. O Vite encaminha as chamadas `/api` para o
 backend em `http://localhost:8001`.
 
+## Infraestrutura fora da Emergent
+
+O site estatico e publicado no GitHub Pages. Importacao remota M3U, Xtream,
+proxy HTTPS, HLS e FFmpeg dependem de um backend independente.
+
+- Backend Docker: `backend/Dockerfile` + `backend/standalone.py` (sem MongoDB).
+- Hospedagem de teste: Blueprint `render.yaml`.
+- Configuracao de dominios de origem: `LUX_ALLOWED_HOSTS` no Render.
+- Vinculo do Pages: variavel Actions `LUX_API_ORIGIN` com o dominio HTTPS do backend.
+
+**[Guia completo de publicacao sem Emergent](docs/DEPLOY-SEM-EMERGENT.md)**
+
 ## Configuracao
 
 Copie `backend/.env.example` para `backend/.env` e ajuste a URL do MongoDB e as
