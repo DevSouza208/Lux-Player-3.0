@@ -16,6 +16,18 @@ jobs:
   m3u:
     runs-on: ubuntu-latest
     steps:
+      - name: Browser preflight must allow JSON POST
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail-with-body --max-time 20 \
+            -o /dev/null -D /tmp/lux-preflight.txt \
+            -X OPTIONS \
+            -H 'Origin: https://devsouza208.github.io' \
+            -H 'Access-Control-Request-Method: POST' \
+            -H 'Access-Control-Request-Headers: content-type' \
+            'https://dntqnwiyelvnukwptosn.supabase.co/functions/v1/lux-playlist-import'
+          grep -iq 'access-control-allow-origin: https://devsouza208.github.io' /tmp/lux-preflight.txt
+          grep -iq 'access-control-allow-methods:.*POST' /tmp/lux-preflight.txt
       - name: Verify CORS and stream from public test playlist
         run: |
           set -euo pipefail
