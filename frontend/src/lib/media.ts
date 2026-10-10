@@ -42,6 +42,13 @@ export function handleMediaImageError(event: SyntheticEvent<HTMLImageElement>) {
   img.style.display = "none";
 }
 
+/** Long-form VOD fallback for MKV/AVI/HEVC. Requires the independent API
+ * to include /api/media/vod; never route live-TV MPEG-TS through here.
+ */
+export function mediaVodFallbackUrl(url: string): string {
+  return `${API_BASE}/media/vod?url=${encodeURIComponent(url)}`;
+}
+
 export function mediaPlaybackUrl(url: string, extension?: string | null, preferWebm = false): string {
   const path = new URL(url).pathname.toLowerCase();
   const rawTransportStream = extension?.toLowerCase() === "ts" || path.endsWith(".ts");
