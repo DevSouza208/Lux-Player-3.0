@@ -48,6 +48,10 @@ async def require_allowed_source(request: Request) -> None:
         if source and "://" not in source:
             source = "http://" + source
 
+    if not source:
+        # Let the existing route return its normal 422 validation response.
+        return
+
     parsed = urlparse(source)
     hostname = (parsed.hostname or "").lower().strip(".")
     if parsed.scheme not in {"http", "https"} or not hostname or hostname not in hosts:
