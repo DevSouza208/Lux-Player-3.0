@@ -46,6 +46,7 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
     let hls: Hls | undefined;
     let lastMovementAt = Date.now();
     let lastSeenPosition = 0;
+    let lastProgressSavedAt = 0;
     let attemptedAutoplay = false;
     let awaitingUserGesture = false;
     let initialVideoError = false;
@@ -139,12 +140,34 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
         lastSeenPosition = video.currentTime;
         lastMovementAt = Date.now();
       }
-      onProgress(video.currentTime, video.duration || duration);
+      // IndexedDB and a giant catalogue should not update on every video frame.
+      if (item.kind !== "live" && video.currentTime >= 2 && Date.now() - lastProgressSavedAt >= 12000) {
+        lastProgressSavedAt = Date.now();
+        onProgress(video.currentTime, video.duration);
+      }
     };
     const onPlay = () => { setPaused(false); setNeedsClick(false); };
-    const onPause = () => setPaused(true);
+    const onPause = () => {
+      setPaused(true);
+      if (!disposed && item.kind !== "live" && video.currentTime >= 2 && !video.ended) {
+        onProgress(video.currentTime, video.duration);
+      }
+    };
     const onCanPlay = () => { setPlaybackState("ready"); requestPlay(); };
-    const onPlaying = () => { setPlaybackState("ready"); lastMovementAt = Date.now(); };
+    const onPlaying = () => {
+      setPlaybackState("ready");
+      lastMovementAt = Date.now();
+      // Record a recent channel visit, without falsely seeking into a live stream.
+      if (item.kind === "live") onProgress(0, 0);
+    };
+    const onEnded = () => {
+      if (disposed || item.kind === "live") return;
+      const finishedAt = Number.isFinite(video.duration) && video.duration > 0
+        ? video.duration : video.currentTime;
+      onProgress(finishedAt, finishedAt);
+      if (item.kind === "series" && nextItem) onNext();
+      else onClose();
+    };
     const onWaiting = () => { if (!video.paused && !disposed) setPlaybackState("loading"); };
     const onError = () => {
       if (disposed || initialVideoError) return;
@@ -161,6 +184,7 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
     video.addEventListener("pause", onPause);
     video.addEventListener("canplay", onCanPlay);
     video.addEventListener("playing", onPlaying);
+    video.addEventListener("ended", onEnded);
     video.addEventListener("waiting", onWaiting);
     video.addEventListener("stalled", onWaiting);
     video.addEventListener("error", onError);
@@ -208,6 +232,7 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
       video.removeEventListener("pause", onPause);
       video.removeEventListener("canplay", onCanPlay);
       video.removeEventListener("playing", onPlaying);
+      video.removeEventListener("ended", onEnded);
       video.removeEventListener("waiting", onWaiting);
       video.removeEventListener("stalled", onWaiting);
       video.removeEventListener("error", onError);
@@ -227,6 +252,14 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
     else video.pause();
     revealControls();
   };
+  const saveBeforeLeaving = () => {
+    const video = videoRef.current;
+    if (item.kind !== "live" && video && video.currentTime >= 2) {
+      onProgress(video.currentTime, video.duration);
+    }
+  };
+  const closePlayer = () => { saveBeforeLeaving(); onClose(); };
+  const nextPlayerEpisode = () => { saveBeforeLeaving(); onNext(); };
   const toggleCaptions = () => {
     setCaptions((value) => !value);
     const tracks = videoRef.current?.textTracks;
@@ -239,11 +272,11 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
   return <div ref={playerRef} className="fixed inset-0 z-[100] flex items-center justify-center bg-black" onMouseMove={revealControls} onTouchStart={revealControls} data-testid="lux-player-overlay">
     <video ref={videoRef} playsInline controls={false} className="size-full object-contain" poster={mediaProxyUrl(item.poster || item.logo)} data-testid="lux-player-video" />
     {playbackState === "loading" && <div className="absolute inset-0 flex items-center justify-center bg-black/50" data-testid="player-loading-state"><div className="text-center"><div className="mx-auto size-10 animate-spin rounded-full border-2 border-white/20 border-t-purple-400" /><p className="mt-4 text-sm text-zinc-300">{playbackAttempt ? (item.kind === "live" ? "Reconectando ao canal..." : "Preparando outro formato de vídeo...") : (item.kind === "live" ? "Preparando o canal com segurança..." : "Preparando episódio...")}</p></div></div>}
-    {playbackState === "error" && <div className="absolute inset-0 flex items-center justify-center bg-black/80 px-6" data-testid="player-error-state"><div className="max-w-md text-center"><h3 className="font-heading text-2xl font-semibold">{item.kind === "live" ? "Este canal não respondeu" : "Não foi possível reproduzir este episódio"}</h3><p className="mt-2 text-sm leading-6 text-zinc-400">{playbackError || "Não foi possível iniciar este canal."}</p><Button onClick={() => setPlaybackAttempt(0)} className="mt-5 mr-3 bg-white text-black hover:bg-zinc-200" data-testid="player-retry-button">Tentar novamente</Button><Button onClick={onClose} className="mt-5 bg-purple-600 text-white hover:bg-purple-500" data-testid="player-error-close-button">Voltar ao catálogo</Button></div></div>}
+    {playbackState === "error" && <div className="absolute inset-0 flex items-center justify-center bg-black/80 px-6" data-testid="player-error-state"><div className="max-w-md text-center"><h3 className="font-heading text-2xl font-semibold">{item.kind === "live" ? "Este canal não respondeu" : "Não foi possível reproduzir este episódio"}</h3><p className="mt-2 text-sm leading-6 text-zinc-400">{playbackError || "Não foi possível iniciar este canal."}</p><Button onClick={() => setPlaybackAttempt(0)} className="mt-5 mr-3 bg-white text-black hover:bg-zinc-200" data-testid="player-retry-button">Tentar novamente</Button><Button onClick={closePlayer} className="mt-5 bg-purple-600 text-white hover:bg-purple-500" data-testid="player-error-close-button">Voltar ao catálogo</Button></div></div>}
     {needsClick && playbackState === "ready" && <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30"><Button onClick={togglePlay} size="lg" className="bg-purple-600 text-white hover:bg-purple-500">Reproduzir canal</Button></div>}
     <div className={`pointer-events-none absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/90 transition-opacity duration-300 ${controlsVisible ? "opacity-100" : "opacity-0"}`} />
     <div className={`absolute inset-x-0 top-0 flex items-center justify-between p-4 transition-opacity duration-300 sm:p-7 ${controlsVisible ? "opacity-100" : "pointer-events-none opacity-0"}`}>
-      <Button variant="ghost" onClick={onClose} data-testid="player-close-button" className="pointer-events-auto text-white hover:bg-white/10"><ChevronLeft /> Voltar</Button>
+      <Button variant="ghost" onClick={closePlayer} data-testid="player-close-button" className="pointer-events-auto text-white hover:bg-white/10"><ChevronLeft /> Voltar</Button>
       <div className="max-w-[50%] text-right"><p className="text-xs tracking-[0.2em] text-purple-300" data-testid="player-kind">{item.kind === "live" ? "AO VIVO" : item.kind === "series" ? "SÉRIE" : "FILME"}</p><h2 className="truncate font-heading text-lg font-semibold text-white" data-testid="player-title">{item.title}</h2></div>
     </div>
     <div className={`absolute inset-x-0 bottom-0 p-4 transition-opacity duration-300 sm:p-7 ${controlsVisible ? "opacity-100" : "pointer-events-none opacity-0"}`}>
@@ -262,10 +295,10 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3 text-xs text-zinc-400">
         <span className="mr-2 flex items-center gap-1" data-testid="player-audio-label"><Languages className="size-3.5" /> Áudio original</span><span className="flex items-center gap-1" data-testid="player-subtitles-label"><Check className="size-3.5 text-purple-300" /> Legendas disponíveis</span>
-        {nextItem && <Button size="sm" onClick={onNext} data-testid="player-next-button" className="ml-auto bg-white text-black hover:bg-zinc-200"><ListVideo /> Próximo episódio</Button>}
+        {nextItem && <Button size="sm" onClick={nextPlayerEpisode} data-testid="player-next-button" className="ml-auto bg-white text-black hover:bg-zinc-200"><ListVideo /> Próximo episódio</Button>}
         <Settings2 className="ml-auto hidden size-4 text-zinc-600 sm:block" data-testid="player-settings-icon" />
       </div>
     </div>
-    <Button size="icon" variant="ghost" onClick={onClose} data-testid="player-dismiss-button" className="absolute top-4 right-4 text-white hover:bg-white/10 sm:hidden"><X /></Button>
+    <Button size="icon" variant="ghost" onClick={closePlayer} data-testid="player-dismiss-button" className="absolute top-4 right-4 text-white hover:bg-white/10 sm:hidden"><X /></Button>
   </div>;
 }
