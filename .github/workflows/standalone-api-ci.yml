@@ -23,7 +23,7 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.deploy.txt
       - name: Install minimal API dependencies
-        run: python -m pip install -r backend/requirements.deploy.txt pytest pytest-asyncio
+        run: python -m pip install -r backend/requirements.deploy.txt pytest pytest-asyncio pytest-xdist
       - name: Check syntax and external API endpoints
         run: |
           python -m compileall -q backend
