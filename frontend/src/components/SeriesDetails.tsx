@@ -6,6 +6,7 @@ import { parseEpisodeMetadata } from "@/lib/catalog";
 import { profileProgressKey } from "@/lib/luxTypes";
 import type { MediaItem, WatchProgress } from "@/lib/luxTypes";
 import type { SeriesGroup } from "@/lib/series";
+import { resumeSeriesEpisode } from "@/lib/watchHistory";
 
 interface SeriesDetailsProps {
   series: SeriesGroup;
@@ -19,6 +20,9 @@ export default function SeriesDetails({ series, profileId, progress, onClose, on
   const [season, setSeason] = useState(series.seasons[0] ?? 1);
   useEffect(() => setSeason(series.seasons[0] ?? 1), [series.id, series.seasons]);
   const episodes = useMemo(() => series.episodes.filter((item) => (parseEpisodeMetadata(item.title).season ?? 1) === season), [season, series.episodes]);
+  const resumeTarget = useMemo(() => resumeSeriesEpisode(series, profileId, progress), [series, profileId, progress]);
+  const hasStarted = series.episodes.some((item) => Boolean(progress[profileProgressKey(profileId, item.id)]));
+  const playFromHere = resumeTarget ?? series.episodes[0];
 
   return <div className="fixed inset-0 z-[80] overflow-y-auto bg-black text-white" data-testid="series-details-overlay">
     <div className="relative min-h-[360px] overflow-hidden border-b border-white/10" data-testid="series-details-hero">
@@ -28,7 +32,7 @@ export default function SeriesDetails({ series, profileId, progress, onClose, on
       <Button variant="ghost" size="icon" onClick={onClose} data-testid="series-details-x-button" className="absolute top-5 right-5 z-10 text-white hover:bg-white/10"><X /></Button>
       <div className="relative flex min-h-[360px] items-end gap-6 px-5 pb-10 sm:px-8 lg:px-12">
         {(series.poster || series.logo) && <img onError={handleMediaImageError} src={mediaProxyUrl(series.poster || series.logo)} alt="" className="hidden aspect-[2/3] w-36 rounded-xl border border-white/10 object-cover shadow-2xl sm:block" data-testid="series-details-poster" />}
-        <div><p className="text-xs font-semibold tracking-[0.24em] text-purple-300" data-testid="series-details-kicker">SÉRIE</p><h1 className="mt-2 font-heading text-4xl font-bold tracking-tight sm:text-6xl" data-testid="series-details-title">{series.title}</h1><p className="mt-3 text-sm text-zinc-400" data-testid="series-details-summary">{series.seasons.length} temporada{series.seasons.length === 1 ? "" : "s"} · {series.episodes.length} episódio{series.episodes.length === 1 ? "" : "s"}</p><Button onClick={() => onPlay(series.episodes[0])} className="mt-6 h-10 bg-white px-5 text-black hover:bg-zinc-200" data-testid="series-start-button"><Play className="fill-current" /> Começar</Button></div>
+        <div><p className="text-xs font-semibold tracking-[0.24em] text-purple-300" data-testid="series-details-kicker">SÉRIE</p><h1 className="mt-2 font-heading text-4xl font-bold tracking-tight sm:text-6xl" data-testid="series-details-title">{series.title}</h1><p className="mt-3 text-sm text-zinc-400" data-testid="series-details-summary">{series.seasons.length} temporada{series.seasons.length === 1 ? "" : "s"} · {series.episodes.length} episódio{series.episodes.length === 1 ? "" : "s"}</p><Button onClick={() => { if (playFromHere) onPlay(playFromHere); }} className="mt-6 h-10 bg-white px-5 text-black hover:bg-zinc-200" data-testid="series-start-button"><Play className="fill-current" /> {hasStarted ? resumeTarget ? "Continuar série" : "Reassistir" : "Começar"}</Button></div>
       </div>
     </div>
     <section className="px-5 py-8 sm:px-8 lg:px-12" data-testid="series-episodes-section">
