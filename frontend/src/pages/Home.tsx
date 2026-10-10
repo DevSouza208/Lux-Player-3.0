@@ -16,6 +16,7 @@ import { profileProgressKey } from "@/lib/luxTypes";
 import type { LuxState, MediaItem, PlaylistRecord, Profile } from "@/lib/luxTypes";
 import { handleMediaImageError, mediaProxyUrl } from "@/lib/media";
 import { buildSeriesCollection, seriesCard } from "@/lib/series";
+import { buildContinueWatching } from "@/lib/watchHistory";
 import type { SeriesGroup } from "@/lib/series";
 
 type View = "home" | "live" | "movies" | "series" | "my-list";
@@ -54,12 +55,6 @@ export default function Home() {
     if (view === "my-list") return filtered.filter((item) => activeList.includes(item.id));
     return filtered;
   }, [activeList, search, state?.media, view]);
-  const continueWatching = useMemo(() => {
-    if (!activeProfile || !state) return [];
-    return state.media
-      .filter((item) => (state.progress[profileProgressKey(activeProfile.id, item.id)]?.position ?? 0) > 8)
-      .sort((a, b) => new Date(state.progress[profileProgressKey(activeProfile.id, b.id)]?.updatedAt || 0).getTime() - new Date(state.progress[profileProgressKey(activeProfile.id, a.id)]?.updatedAt || 0).getTime());
-  }, [activeProfile, state]);
   const heroItem = visibleMedia[0] ?? state?.media[0];
   const { live, movies, series } = useMemo(() => ({
     live: visibleMedia.filter((item) => item.kind === "live"),
@@ -67,6 +62,11 @@ export default function Home() {
     series: visibleMedia.filter((item) => item.kind === "series"),
   }), [visibleMedia]);
   const allSeriesCollection = useMemo(() => buildSeriesCollection(state?.media ?? []), [state?.media]);
+  const continueWatching = useMemo(() => (
+    activeProfile && state
+      ? buildContinueWatching(state.media, state.progress, activeProfile.id, allSeriesCollection)
+      : []
+  ), [activeProfile?.id, state?.media, state?.progress, allSeriesCollection]);
   const visibleSeriesCollection = useMemo(() => buildSeriesCollection(series), [series]);
   const seriesCards = useMemo(() => visibleSeriesCollection.groups.map(seriesCard), [visibleSeriesCollection.groups]);
   const currentProgress = selected && activeProfile ? state?.progress[profileProgressKey(activeProfile.id, selected.id)] : undefined;
@@ -77,7 +77,21 @@ export default function Home() {
   const importItems = (items: MediaItem[], playlist: PlaylistRecord) => { if (!state) return; const next = { ...state, playlists: [...state.playlists.filter((existing) => existing.id !== playlist.id), playlist], media: [...state.media.filter((item) => item.playlistId !== playlist.id), ...items] }; commit(next); };
   const toggleList = (item: MediaItem) => { if (!state || !activeProfile) return; const current = state.myList[activeProfile.id] ?? []; const nextList = current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id]; commit({ ...state, myList: { ...state.myList, [activeProfile.id]: nextList } }); toast.success(current.includes(item.id) ? "Removido da Minha lista" : "Adicionado à Minha lista"); };
   const play = (item: MediaItem) => { if (!item.streamUrl) return toast.error("Este item ainda não possui um endereço de reprodução."); setSelected(item); };
-  const updateProgress = (position: number, duration: number) => { if (!activeProfile || !selected || !duration) return; const key = profileProgressKey(activeProfile.id, selected.id); const entry = { position, duration, updatedAt: new Date().toISOString() }; setState((current) => current ? { ...current, progress: { ...current.progress, [key]: entry } } : current); void saveWatchProgress(key, entry); };
+  const updateProgress = (position: number, duration: number) => {
+    if (!activeProfile || !selected) return;
+    // A channel has no duration and cannot be resumed at a timestamp.
+    // Recording its visit makes it appear in "Continuar assistindo" as live TV.
+    const isLive = selected.kind === "live";
+    if (!isLive && (!Number.isFinite(position) || position < 0)) return;
+    const key = profileProgressKey(activeProfile.id, selected.id);
+    const entry = {
+      position: isLive ? 0 : position,
+      duration: isLive ? 0 : Number.isFinite(duration) && duration > 0 ? duration : 0,
+      updatedAt: new Date().toISOString(),
+    };
+    setState((current) => current ? { ...current, progress: { ...current.progress, [key]: entry } } : current);
+    void saveWatchProgress(key, entry);
+  };
   const selectedEpisodeGroup = selected ? allSeriesCollection.byEpisodeId.get(selected.id) : undefined;
   const selectedEpisodeIndex = selected && selectedEpisodeGroup ? selectedEpisodeGroup.episodes.findIndex((item) => item.id === selected.id) : -1;
   const nextEpisode = selectedEpisodeGroup && selectedEpisodeIndex >= 0 ? selectedEpisodeGroup.episodes[selectedEpisodeIndex + 1] : undefined;
@@ -115,7 +129,7 @@ export default function Home() {
 
     <AnimatePresence>{showImport && <ImportCenter onClose={() => setShowImport(false)} onImported={importItems} />}</AnimatePresence>
     <AnimatePresence>{showProfiles && <ProfileGate profiles={state.profiles} initial={false} onSelect={selectProfile} onCreate={createProfile} onClose={() => setShowProfiles(false)} />}</AnimatePresence>
-    <AnimatePresence>{selected && activeProfile && <LuxPlayer key={selected.id} item={selected} nextItem={nextEpisode} progress={currentProgress} onClose={() => setSelected(null)} onProgress={updateProgress} onNext={() => { if (nextEpisode) setSelected(nextEpisode); }} />}</AnimatePresence>
+    <AnimatePresence>{selected && activeProfile && <LuxPlayer key={selected.id} item={selected} nextItem={selected.kind === "series" ? nextEpisode : undefined} progress={currentProgress} onClose={() => setSelected(null)} onProgress={updateProgress} onNext={() => { if (selected.kind === "series" && nextEpisode) setSelected(nextEpisode); }} />}</AnimatePresence>
     <AnimatePresence>{selectedSeries && activeProfile && <SeriesDetails series={selectedSeries} profileId={activeProfile.id} progress={state.progress} onClose={() => setSelectedSeries(null)} onPlay={play} />}</AnimatePresence>
     {!activeProfile && <ProfileGate profiles={state.profiles} initial onSelect={selectProfile} onCreate={createProfile} />}
   </div>;
