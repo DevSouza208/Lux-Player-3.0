@@ -10,6 +10,7 @@ export interface MediaItem {
   poster?: string | null;
   season?: number | null;
   episode?: number | null;
+  seriesTitle?: string | null;
   description?: string | null;
   containerExtension?: string | null;
   playlistId: string;
@@ -37,6 +38,7 @@ export interface WatchProgress {
 }
 
 export interface LuxState {
+  catalogVersion: number;
   profiles: Profile[];
   activeProfileId: string | null;
   playlists: PlaylistRecord[];
@@ -67,6 +69,7 @@ export interface PlaylistParseResult {
 }
 
 export const EMPTY_LUX_STATE: LuxState = {
+  catalogVersion: 3,
   profiles: [],
   activeProfileId: null,
   playlists: [],

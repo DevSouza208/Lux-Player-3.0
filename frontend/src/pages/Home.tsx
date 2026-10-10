@@ -7,12 +7,16 @@ import { Badge } from "@/components/ui/badge";
 import ImportCenter from "@/components/ImportCenter";
 import LuxPlayer from "@/components/LuxPlayer";
 import MediaRail from "@/components/MediaRail";
+import CatalogGrid from "@/components/CatalogGrid";
+import SeriesDetails from "@/components/SeriesDetails";
 import ProfileGate from "@/components/ProfileGate";
 import { createLocalId } from "@/lib/storage";
-import { loadLuxState, saveLuxState } from "@/lib/storage";
+import { loadLuxState, saveLuxState, saveWatchProgress } from "@/lib/storage";
 import { profileProgressKey } from "@/lib/luxTypes";
 import type { LuxState, MediaItem, PlaylistRecord, Profile } from "@/lib/luxTypes";
 import { mediaProxyUrl } from "@/lib/media";
+import { buildSeriesCollection, seriesCard } from "@/lib/series";
+import type { SeriesGroup } from "@/lib/series";
 
 type View = "home" | "live" | "movies" | "series" | "my-list";
 
@@ -32,8 +36,11 @@ export default function Home() {
   const [selected, setSelected] = useState<MediaItem | null>(null);
   const [search, setSearch] = useState("");
   const [mobileNav, setMobileNav] = useState(false);
+  const [catalogPage, setCatalogPage] = useState(1);
+  const [selectedSeries, setSelectedSeries] = useState<SeriesGroup | null>(null);
 
-  useEffect(() => { void loadLuxState().then(setState).catch(() => setState({ profiles: [], activeProfileId: null, playlists: [], media: [], myList: {}, progress: {} })); }, []);
+  useEffect(() => { void loadLuxState().then(setState).catch(() => setState({ catalogVersion: 3, profiles: [], activeProfileId: null, playlists: [], media: [], myList: {}, progress: {} })); }, []);
+  useEffect(() => { setCatalogPage(1); }, [view, search, state?.media.length]);
 
   const activeProfile = state?.profiles.find((profile) => profile.id === state.activeProfileId);
   const activeList = activeProfile ? state?.myList[activeProfile.id] ?? [] : [];
@@ -54,9 +61,14 @@ export default function Home() {
       .sort((a, b) => new Date(state.progress[profileProgressKey(activeProfile.id, b.id)]?.updatedAt || 0).getTime() - new Date(state.progress[profileProgressKey(activeProfile.id, a.id)]?.updatedAt || 0).getTime());
   }, [activeProfile, state]);
   const heroItem = visibleMedia[0] ?? state?.media[0];
-  const live = visibleMedia.filter((item) => item.kind === "live");
-  const movies = visibleMedia.filter((item) => item.kind === "movie");
-  const series = visibleMedia.filter((item) => item.kind === "series");
+  const { live, movies, series } = useMemo(() => ({
+    live: visibleMedia.filter((item) => item.kind === "live"),
+    movies: visibleMedia.filter((item) => item.kind === "movie"),
+    series: visibleMedia.filter((item) => item.kind === "series"),
+  }), [visibleMedia]);
+  const allSeriesCollection = useMemo(() => buildSeriesCollection(state?.media ?? []), [state?.media]);
+  const visibleSeriesCollection = useMemo(() => buildSeriesCollection(series), [series]);
+  const seriesCards = useMemo(() => visibleSeriesCollection.groups.map(seriesCard), [visibleSeriesCollection.groups]);
   const currentProgress = selected && activeProfile ? state?.progress[profileProgressKey(activeProfile.id, selected.id)] : undefined;
 
   const commit = (next: LuxState) => { setState(next); void saveLuxState(next); };
@@ -65,8 +77,11 @@ export default function Home() {
   const importItems = (items: MediaItem[], playlist: PlaylistRecord) => { if (!state) return; const next = { ...state, playlists: [...state.playlists.filter((existing) => existing.id !== playlist.id), playlist], media: [...state.media.filter((item) => item.playlistId !== playlist.id), ...items] }; commit(next); };
   const toggleList = (item: MediaItem) => { if (!state || !activeProfile) return; const current = state.myList[activeProfile.id] ?? []; const nextList = current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id]; commit({ ...state, myList: { ...state.myList, [activeProfile.id]: nextList } }); toast.success(current.includes(item.id) ? "Removido da Minha lista" : "Adicionado à Minha lista"); };
   const play = (item: MediaItem) => { if (!item.streamUrl) return toast.error("Este item ainda não possui um endereço de reprodução."); setSelected(item); };
-  const updateProgress = (position: number, duration: number) => { if (!state || !activeProfile || !selected || !duration) return; const next = { ...state, progress: { ...state.progress, [profileProgressKey(activeProfile.id, selected.id)]: { position, duration, updatedAt: new Date().toISOString() } } }; setState(next); void saveLuxState(next); };
-  const nextEpisode = selected ? state?.media.filter((item) => item.kind === "series" && item.group === selected.group && item.season === selected.season && (item.episode ?? 0) > (selected.episode ?? 0)).sort((a, b) => (a.episode ?? 0) - (b.episode ?? 0))[0] : undefined;
+  const updateProgress = (position: number, duration: number) => { if (!activeProfile || !selected || !duration) return; const key = profileProgressKey(activeProfile.id, selected.id); const entry = { position, duration, updatedAt: new Date().toISOString() }; setState((current) => current ? { ...current, progress: { ...current.progress, [key]: entry } } : current); void saveWatchProgress(key, entry); };
+  const selectedEpisodeGroup = selected ? allSeriesCollection.byEpisodeId.get(selected.id) : undefined;
+  const selectedEpisodeIndex = selected && selectedEpisodeGroup ? selectedEpisodeGroup.episodes.findIndex((item) => item.id === selected.id) : -1;
+  const nextEpisode = selectedEpisodeGroup && selectedEpisodeIndex >= 0 ? selectedEpisodeGroup.episodes[selectedEpisodeIndex + 1] : undefined;
+  const openSeries = (item: MediaItem) => { const group = visibleSeriesCollection.byRepresentativeId.get(item.id) ?? allSeriesCollection.byEpisodeId.get(item.id); if (group) setSelectedSeries(group); };
 
   if (!state) return <div className="flex min-h-svh items-center justify-center bg-black text-purple-200" data-testid="lux-loading-screen"><Sparkles className="mr-3 size-5 animate-pulse" /> Abrindo seu Lux Player...</div>;
 
@@ -92,7 +107,7 @@ export default function Home() {
       <div className="px-5 sm:px-8 lg:px-12">{state.media.length > 0 && <div className="mt-8 flex flex-wrap gap-2" data-testid="quick-category-nav">{navItems.slice(1).map((item) => <button type="button" key={item.id} onClick={() => setView(item.id)} data-testid={`quick-nav-${item.id}`} className={`rounded-full border px-4 py-2 text-sm transition-colors ${view === item.id ? "border-purple-400 bg-purple-600 text-white" : "border-white/10 bg-white/[0.04] text-zinc-300 hover:border-purple-300/60 hover:text-white"}`}>{item.label}</button>)}</div>}
       </div>
       {state.media.length === 0 && <section className="mx-5 mt-10 rounded-3xl border border-white/10 bg-white/[0.035] p-6 sm:mx-8 sm:p-10 lg:mx-12" data-testid="empty-library-panel"><div className="flex max-w-xl items-start gap-4"><div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-purple-600/20 text-purple-300"><FilePlus2 /></div><div><h2 className="font-heading text-2xl font-semibold" data-testid="empty-library-title">Sua biblioteca está pronta para nascer</h2><p className="mt-2 text-sm leading-6 text-zinc-400" data-testid="empty-library-description">M3U, M3U8 ou XStream: adicione uma fonte e o Lux cuida da organização por você.</p><Button onClick={() => setShowImport(true)} className="mt-5 bg-purple-600 text-white hover:bg-purple-500" data-testid="empty-library-import-button">Importar conteúdo</Button></div></div></section>}
-      {state.media.length > 0 && <div data-testid="catalog-content">{continueWatching.length > 0 && <MediaRail title="Continuar assistindo" items={continueWatching} landscape myList={activeList} onPlay={play} onToggleList={toggleList} />}{view === "home" ? <><MediaRail title="Ao vivo agora" items={live} landscape myList={activeList} onPlay={play} onToggleList={toggleList} /><MediaRail title="Filmes para você" items={movies} myList={activeList} onPlay={play} onToggleList={toggleList} /><MediaRail title="Suas séries" items={series} myList={activeList} onPlay={play} onToggleList={toggleList} /></> : <MediaRail title={navItems.find((item) => item.id === view)?.label || "Minha lista"} items={visibleMedia} landscape={view === "live"} myList={activeList} onPlay={play} onToggleList={toggleList} />}</div>}
+      {state.media.length > 0 && <div data-testid="catalog-content">{view === "home" ? <>{continueWatching.length > 0 && <MediaRail title="Continuar assistindo" items={continueWatching} landscape myList={activeList} onPlay={play} onToggleList={toggleList} />}<MediaRail title="Ao vivo agora" items={live} landscape myList={activeList} onPlay={play} onToggleList={toggleList} /><MediaRail title="Filmes para você" items={movies} myList={activeList} onPlay={play} onToggleList={toggleList} /><MediaRail title="Suas séries" items={seriesCards} myList={activeList} onPlay={openSeries} onToggleList={toggleList} /></> : <CatalogGrid title={navItems.find((item) => item.id === view)?.label || "Minha lista"} items={view === "series" ? seriesCards : visibleMedia} page={catalogPage} onPageChange={(page) => { setCatalogPage(page); window.scrollTo({ top: 0, behavior: "smooth" }); }} myList={activeList} onPlay={view === "series" ? openSeries : play} onToggleList={toggleList} />}</div>}
       {state.media.length > 0 && !visibleMedia.length && <div className="py-24 text-center" data-testid="catalog-empty-search"><Search className="mx-auto size-8 text-zinc-600" /><p className="mt-4 text-zinc-400" data-testid="catalog-empty-message">Nada encontrado nessa seleção.</p></div>}
     </main>
 
@@ -101,6 +116,7 @@ export default function Home() {
     <AnimatePresence>{showImport && <ImportCenter onClose={() => setShowImport(false)} onImported={importItems} />}</AnimatePresence>
     <AnimatePresence>{showProfiles && <ProfileGate profiles={state.profiles} initial={false} onSelect={selectProfile} onCreate={createProfile} onClose={() => setShowProfiles(false)} />}</AnimatePresence>
     <AnimatePresence>{selected && activeProfile && <LuxPlayer item={selected} nextItem={nextEpisode} progress={currentProgress} onClose={() => setSelected(null)} onProgress={updateProgress} onNext={() => { if (nextEpisode) setSelected(nextEpisode); }} />}</AnimatePresence>
+    <AnimatePresence>{selectedSeries && activeProfile && <SeriesDetails series={selectedSeries} profileId={activeProfile.id} progress={state.progress} onClose={() => setSelectedSeries(null)} onPlay={play} />}</AnimatePresence>
     {!activeProfile && <ProfileGate profiles={state.profiles} initial onSelect={selectProfile} onCreate={createProfile} />}
   </div>;
 }

@@ -1,21 +1,15 @@
 import type { MediaItem, MediaKind, PlaylistItemResponse } from "@/lib/luxTypes";
 import { createLocalId } from "@/lib/storage";
+import { classifyMediaKind, parseEpisodeMetadata, seriesTitleFromTitle } from "@/lib/catalog";
 
 function attributes(line: string) {
   return Object.fromEntries([...line.matchAll(/([\w-]+)="([^"]*)"/g)].map((match) => [match[1].toLowerCase(), match[2]]));
 }
 
-function classify(title: string, group: string, url: string): MediaKind {
-  const haystack = `${title} ${group}`.toLowerCase();
-  if (/s\d{1,2}\s*e\d{1,2}|season|temporada|series|séries/.test(haystack)) return "series";
-  if (/movie|filme|vod|cinema|film/.test(haystack)) return "movie";
-  if (/live|canal|canais|tv/.test(haystack) || url.toLowerCase().includes(".m3u8")) return "live";
-  return "movie";
-}
-
-function parseEpisode(title: string) {
-  const match = title.match(/s(\d{1,2})\s*e(\d{1,2})/i);
-  return match ? { season: Number(match[1]), episode: Number(match[2]) } : { season: null, episode: null };
+function mediaItem(title: string, streamUrl: string, group: string, metadata: Record<string, string>, playlistId: string): MediaItem {
+  const kind = classifyMediaKind(title, group, streamUrl);
+  const episode = parseEpisodeMetadata(title);
+  return { id: createLocalId("media"), title, streamUrl, kind, group, logo: metadata["tvg-logo"] || metadata.logo || null, poster: metadata["tvg-logo"] || metadata.poster || null, season: episode.season, episode: episode.episode, seriesTitle: kind === "series" ? seriesTitleFromTitle(title) : null, playlistId };
 }
 
 export function parseM3U(text: string, playlistId: string): MediaItem[] {
@@ -32,19 +26,7 @@ export function parseM3U(text: string, playlistId: string): MediaItem[] {
     if (line.startsWith("#")) continue;
     const title = pendingAttributes["tvg-name"] || pendingTitle || line.split("/").pop() || "Sem título";
     const group = pendingAttributes["group-title"] || pendingAttributes.group || "";
-    const episode = parseEpisode(title);
-    items.push({
-      id: createLocalId("media"),
-      title,
-      streamUrl: line,
-      kind: classify(title, group, line),
-      group,
-      logo: pendingAttributes["tvg-logo"] || pendingAttributes.logo || null,
-      poster: pendingAttributes["tvg-logo"] || pendingAttributes.poster || null,
-      season: episode.season,
-      episode: episode.episode,
-      playlistId,
-    });
+    items.push(mediaItem(title, line, group, pendingAttributes, playlistId));
     pendingAttributes = {};
     pendingTitle = "";
   }
@@ -64,8 +46,7 @@ export async function parseM3UAsync(text: string, playlistId: string): Promise<M
     } else if (!line.startsWith("#")) {
       const title = pendingAttributes["tvg-name"] || pendingTitle || line.split("/").pop() || "Sem título";
       const group = pendingAttributes["group-title"] || pendingAttributes.group || "";
-      const episode = parseEpisode(title);
-      items.push({ id: createLocalId("media"), title, streamUrl: line, kind: classify(title, group, line), group, logo: pendingAttributes["tvg-logo"] || pendingAttributes.logo || null, poster: pendingAttributes["tvg-logo"] || pendingAttributes.poster || null, season: episode.season, episode: episode.episode, playlistId });
+      items.push(mediaItem(title, line, group, pendingAttributes, playlistId));
       pendingAttributes = {};
       pendingTitle = "";
     }
@@ -78,7 +59,7 @@ export async function parseM3UStream(stream: ReadableStream<Uint8Array>, playlis
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   const items: MediaItem[] = [];
-  const maxItems = 50000;
+  const maxItems = 500000;
   let buffer = "";
   let pendingAttributes: Record<string, string> = {};
   let pendingTitle = "";
@@ -93,8 +74,7 @@ export async function parseM3UStream(stream: ReadableStream<Uint8Array>, playlis
       if (items.length >= maxItems) { truncated = true; return; }
       const title = pendingAttributes["tvg-name"] || pendingTitle || normalized.split("/").pop() || "Sem título";
       const group = pendingAttributes["group-title"] || pendingAttributes.group || "";
-      const episode = parseEpisode(title);
-      items.push({ id: createLocalId("media"), title, streamUrl: normalized, kind: classify(title, group, normalized), group, logo: pendingAttributes["tvg-logo"] || pendingAttributes.logo || null, poster: pendingAttributes["tvg-logo"] || pendingAttributes.poster || null, season: episode.season, episode: episode.episode, playlistId });
+      items.push(mediaItem(title, normalized, group, pendingAttributes, playlistId));
       pendingAttributes = {};
       pendingTitle = "";
     }
@@ -128,6 +108,7 @@ export function normalizeRemoteItems(items: PlaylistItemResponse[], playlistId: 
     poster: item.poster,
     season: item.season,
     episode: item.episode,
+    seriesTitle: item.kind === "series" ? seriesTitleFromTitle(item.title) : null,
     description: item.description,
     containerExtension: item.container_extension,
     playlistId,

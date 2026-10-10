@@ -1,0 +1,79 @@
+{
+  "passed": 10,
+  "failed": 0,
+  "bugs": [],
+  "action_items": [],
+  "retest_needed": false,
+  "checks": [
+    {
+      "criterion": "Reclassificar automaticamente catálogos antigos já salvos",
+      "name": "old-catalog-migrates-to-v2",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Injected catalogVersion 1 IndexedDB state (lux-player-db/app-state) with A&E/CNN as movie/series, Gladiador/Cidades de Papel as live/series, Silo S01E01 as live, plus myList and progress for Silo. After reload, catalog-content loaded and nav tabs showed: Ao vivo=A&E+CNN only (AO VIVO badge), Filmes=Gladiador+Cidades de Papel only (FILME badge), Séries=Silo S01E01 only (SÉRIE badge); Minha lista still contained Silo; re-read of IndexedDB confirmed catalogVersion persisted as 2."
+    },
+    {
+      "criterion": "Separar TV ao vivo de filmes e séries",
+      "name": "live-tv-separated-from-vod-on-import",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Imported m3u with CANAIS|4K UHD and CANAIS|PAY-PER-VIEW groups (.ts URLs) plus a movie (❖ 2 Acao/Drama, .mp4) and a series (❖ Netflix/Legendadas, 1x05). Ao vivo tab showed only the two .ts live items; Filmes and Séries tabs each had zero cards matching the live titles. Re-verified against public preview URL https://playlist-streamer-10.preview.emergentagent.com with identical pass result."
+    },
+    {
+      "criterion": "Classificar filmes VOD corretamente",
+      "name": "vod-movies-classified-by-genre-group",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Imported .mkv/.avi items under genre groups '❖ 2 Acao/Drama' and '❖ Drama' alongside a CANAIS live item. Filmes tab showed both genre-grouped movies with FILME badge; the live item did not appear in Filmes."
+    },
+    {
+      "criterion": "Classificar episódios corretamente",
+      "name": "vod-episodes-classified-by-pattern",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Imported 4 VOD titles covering S01E02, S01 E03, T01E04 and 1x05 patterns under a Netflix/Legendadas group. All 4 appeared in Séries with SÉRIE badge and none appeared in Filmes."
+    },
+    {
+      "criterion": "Manter classificação correta em novas importações",
+      "name": "fresh-import-separates-without-reload",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Imported a fresh m3u (one live .ts, one movie .mp4, one S01E01 series) and asserted separation across Ao vivo/Filmes/Séries tabs immediately after the import resolved, with no page.reload() call."
+    },
+    {
+      "criterion": "Eliminar mixed content de imagens e streams HTTP (regression)",
+      "name": "image-proxy-no-mixed-content",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-run of persisted check: image/stream proxying confirmed same-origin, zero direct HTTP requests."
+    },
+    {
+      "criterion": "Reproduzir MPEG-TS no navegador pelo HTTPS do Lux (regression)",
+      "name": "mpegts-remux-plays-same-origin",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-run of persisted check: remux playback via /api/media/remux advanced currentTime beyond 0.2s."
+    },
+    {
+      "criterion": "Manter feedback quando o provedor estiver indisponível (regression)",
+      "name": "player-shows-friendly-error-on-dead-provider",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-run of persisted check: friendly error state with 'Voltar ao catálogo' button surfaced for a dead provider host."
+    },
+    {
+      "criterion": "Importar playlist válida por URL sem travar ou retornar 502 (regression)",
+      "name": "playlist-url-imports-catalog",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-run of persisted check: remote m3u import rendered catalog-content with Ao vivo rail."
+    },
+    {
+      "criterion": "Backend suite (playlist proxy) regression guard",
+      "name": "test_tscheck_playlist_url.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "pytest -q on /app/backend/tests -> 2 passed in 0.65s against running server on :8001."
+    }
+  ]
+}

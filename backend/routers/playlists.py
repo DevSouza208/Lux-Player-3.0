@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 from uuid import uuid4
 
@@ -9,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from models.playlist import PlaylistItem, PlaylistParseResult, PlaylistUrlRequest
 
 router = APIRouter(prefix="/playlists", tags=["playlists"])
-MAX_PLAYLIST_BYTES = 100 * 1024 * 1024
+MAX_PLAYLIST_BYTES = 256 * 1024 * 1024
 MAX_PLAYLIST_ITEMS = 30000
 
 
@@ -25,18 +26,26 @@ def _attributes(line: str) -> dict[str, str]:
 
 
 def _kind(title: str, group: str, stream_url: str) -> str:
-    haystack = f"{title} {group}".lower()
-    if re.search(r"s\d{1,2}\s*e\d{1,2}|season|temporada|series|séries", haystack):
+    clean_group = "".join(char for char in unicodedata.normalize("NFD", group.lower()) if unicodedata.category(char) != "Mn")
+    path = stream_url.split("?", 1)[0].lower()
+    extension = path.rsplit(".", 1)[-1] if "." in path.rsplit("/", 1)[-1] else ""
+    if re.search(r"\b(canal|canais|ao vivo|live|pay[- ]?per[- ]?view|ppv|24h|radio)\b", clean_group) or extension == "ts":
+        return "live"
+    if re.search(r"\b(?:s|t)\d{1,2}\s*[-_. ]*e(?:p)?\s*\d{1,3}\b|\b\d{1,2}x\d{1,3}\b", title, re.IGNORECASE):
         return "series"
-    if any(token in haystack for token in ("movie", "filme", "vod", "cinema", "film")):
+    if re.search(r"\b(serie|series|novela|novelas|dorama|doramas|temporada|temporadas|episodio|episodios|anime|animes)\b", clean_group):
+        return "series"
+    if re.search(r"\b(filme|filmes|movie|movies|cinema|vod|acao|animacao|aventura|comedia|crime|documentario|documentarios|drama|fantasia|faroeste|ficcao|infantil|lancamento|lancamentos|nacional|nacionais|romance|suspense|terror)\b", clean_group):
         return "movie"
-    if "live" in haystack or "canal" in haystack or "canais" in haystack or "tv" in haystack or ".m3u8" in stream_url.lower():
+    if extension == "m3u8":
         return "live"
     return "movie"
 
 
 def _episode(title: str) -> tuple[int | None, int | None]:
-    match = re.search(r"s(\d{1,2})\s*e(\d{1,2})", title, re.IGNORECASE)
+    match = re.search(r"\b(?:s|t)(\d{1,2})\s*[-_. ]*e(?:p)?\s*(\d{1,3})\b", title, re.IGNORECASE)
+    if not match:
+        match = re.search(r"\b(\d{1,2})x(\d{1,3})\b", title, re.IGNORECASE)
     return (int(match.group(1)), int(match.group(2))) if match else (None, None)
 
 
@@ -99,7 +108,7 @@ async def _xstream_request(client: httpx.AsyncClient, base: str, username: str, 
 
 @router.get("/proxy")
 async def proxy_m3u(url: str = Query(..., min_length=8)):
-    timeout = httpx.Timeout(25.0, connect=5.0)
+    timeout = httpx.Timeout(75.0, connect=10.0)
     client = httpx.AsyncClient(follow_redirects=True, timeout=timeout)
     try:
         upstream_request = client.build_request("GET", url)
@@ -146,7 +155,7 @@ async def parse_playlist_url(request: PlaylistUrlRequest):
                     async for chunk in response.aiter_bytes():
                         received += len(chunk)
                         if received > MAX_PLAYLIST_BYTES:
-                            raise HTTPException(status_code=413, detail="A playlist excede o limite de 12 MB")
+                            raise HTTPException(status_code=413, detail="A playlist excede o limite de 256 MB")
                         chunks.append(chunk)
                     text = b"".join(chunks).decode("utf-8-sig", errors="replace")
         except httpx.TimeoutException as exc:
