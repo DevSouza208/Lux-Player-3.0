@@ -1,0 +1,32 @@
+name: Test standalone IPTV backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'render.yaml'
+      - '.github/workflows/standalone-api-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.deploy.txt
+      - name: Install minimal API dependencies
+        run: python -m pip install -r backend/requirements.deploy.txt pytest pytest-asyncio
+      - name: Check syntax and external API endpoints
+        run: |
+          python -m compileall -q backend
+          PYTHONPATH=backend pytest -q backend/deploy_tests/
+      - name: Ensure standalone Docker image builds
+        run: docker build --file backend/Dockerfile backend
