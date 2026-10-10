@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Play, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { mediaProxyUrl } from "@/lib/media";
+import { handleMediaImageError, mediaProxyUrl } from "@/lib/media";
 import type { MediaItem } from "@/lib/luxTypes";
 
 export const CATALOG_PAGE_SIZE = 48;
@@ -50,7 +50,7 @@ export default function CatalogGrid({ title, items, page, onPageChange, myList, 
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8" data-testid="catalog-page-items">
       {pageItems.map((item) => <article key={item.id} className="group overflow-hidden rounded-xl border border-white/10 bg-zinc-900 transition-transform duration-300 hover:-translate-y-1 hover:border-purple-400/60" data-testid={`catalog-grid-card-${item.id}`}>
         <button type="button" onClick={() => onPlay(item)} data-testid={`catalog-grid-play-${item.id}`} className="relative block aspect-[2/3] w-full overflow-hidden bg-gradient-to-br from-purple-950 via-zinc-900 to-black text-left focus-visible:ring-2 focus-visible:ring-purple-400">
-          {(item.poster || item.logo) && <img src={mediaProxyUrl(item.poster || item.logo)} alt="" loading="lazy" className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105" />}
+          {(item.poster || item.logo) && <img onError={handleMediaImageError} src={mediaProxyUrl(item.poster || item.logo)} alt="" loading="lazy" className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105" />}
           <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
           <Badge className="absolute top-2 left-2 border-white/10 bg-black/65 text-[10px] text-white backdrop-blur" data-testid={`catalog-grid-kind-${item.id}`}>{item.kind === "live" ? "AO VIVO" : item.kind === "series" ? "SÉRIE" : "FILME"}</Badge>
           <span className="absolute right-2 bottom-2 flex size-8 items-center justify-center rounded-full bg-white text-black opacity-0 shadow-lg transition-opacity duration-200 group-hover:opacity-100"><Play className="size-4 fill-current" /></span>
