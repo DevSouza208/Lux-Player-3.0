@@ -4,6 +4,7 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 from uuid import uuid4
 
 import httpx
+from outbound_guard import enforce_request_host
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
@@ -109,7 +110,7 @@ async def _xstream_request(client: httpx.AsyncClient, base: str, username: str, 
 @router.get("/proxy")
 async def proxy_m3u(url: str = Query(..., min_length=8)):
     timeout = httpx.Timeout(75.0, connect=10.0)
-    client = httpx.AsyncClient(follow_redirects=True, timeout=timeout)
+    client = httpx.AsyncClient(follow_redirects=True, timeout=timeout, event_hooks={"request": [enforce_request_host]})
     try:
         upstream_request = client.build_request("GET", url)
         upstream_response = await client.send(upstream_request, stream=True)
@@ -147,7 +148,7 @@ async def parse_playlist_url(request: PlaylistUrlRequest):
             raise HTTPException(status_code=422, detail="URL da playlist é obrigatória")
         try:
             timeout = httpx.Timeout(10.0, connect=4.0)
-            async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
+            async with httpx.AsyncClient(follow_redirects=True, timeout=timeout, event_hooks={"request": [enforce_request_host]}) as client:
                 async with client.stream("GET", request.url) as response:
                     response.raise_for_status()
                     chunks: list[bytes] = []
@@ -181,7 +182,7 @@ async def parse_playlist_url(request: PlaylistUrlRequest):
     warnings: list[str] = []
     items: list[PlaylistItem] = []
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=35) as client:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=35, event_hooks={"request": [enforce_request_host]}) as client:
             login = await _xstream_request(client, base, username, password)
             server_info = login.get("server_info", {}) if isinstance(login, dict) else {}
             secure = str(server_info.get("https", "")).lower() in {"1", "true", "https"}
