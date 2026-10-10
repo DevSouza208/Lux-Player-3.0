@@ -4,7 +4,7 @@ import { Captions, Check, ChevronLeft, Expand, Languages, ListVideo, Pause, Pict
 import { Button } from "@/components/ui/button";
 import type { MediaItem, WatchProgress } from "@/lib/luxTypes";
 import { formatTime } from "@/lib/playlist";
-import { mediaPlaybackUrl, mediaProxyUrl, mediaVodFallbackUrl } from "@/lib/media";
+import { mediaPlaybackUrl, mediaProxyUrl, mediaVodFallbackUrl, VOD_API_ORIGIN } from "@/lib/media";
 import { API_BASE } from "@/lib/apiOrigin";
 
 interface LuxPlayerProps {
@@ -84,7 +84,7 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
         if (isVod) {
           // A 422 here means the route exists but requires a URL.
           // The old Emergent preview answers 404: do not retry video endlessly.
-          void fetch(`${API_BASE}/media/vod`)
+          void fetch(`${VOD_API_ORIGIN}/api/media/vod`)
             .then((response) => {
               if (disposed) return;
               if (response.status === 404) {
