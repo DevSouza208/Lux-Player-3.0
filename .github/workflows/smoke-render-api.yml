@@ -1,0 +1,61 @@
+name: Smoke test Render IPTV API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/smoke-render-api.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check health, CORS and routes
+        run: |
+          set -euo pipefail
+          host='https://lux-player-iptv-api.onrender.com'
+          curl --retry 2 --fail --silent --show-error --max-time 120 "$host/api/health" | tee /tmp/health
+          grep -q '"configured":true' /tmp/health
+          for route in playlists/proxy media/proxy media/remux media/vod; do
+            code=$(curl -sS -o /dev/null --max-time 60 -w '%{http_code}' "$host/api/$route")
+            test "$code" = 422 || { echo "$route: expected 422, got $code"; exit 1; }
+          done
+          curl -sS -X OPTIONS -D /tmp/cors -o /dev/null -m 30 \
+            -H 'Origin: https://devsouza208.github.io' \
+            -H 'Access-Control-Request-Method: GET' "$host/api/media/vod"
+          grep -iq 'access-control-allow-origin: https://devsouza208.github.io' /tmp/cors
+      - name: Test proxied public MP4 byte ranges
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --max-time 50 -D /tmp/headers -o /tmp/part \
+            -w '%{http_code}' \
+            -H 'Range: bytes=0-4095' \
+            --get --data-urlencode 'url=https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4' \
+            https://lux-player-iptv-api.onrender.com/api/media/proxy)
+          test "$code" = 206 || { echo "MP4 Range failed: $code"; cat /tmp/headers; exit 1; }
+          head -c 200 /tmp/part | grep -q ftyp
+      - name: Test full VOD FFmpeg pipeline with small public MP4
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --max-time 110 --max-filesize 4000000 \
+            -D /tmp/vodheaders -o /tmp/vod \
+            -w '%{http_code}' \
+            --get --data-urlencode 'url=https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4' \
+            https://lux-player-iptv-api.onrender.com/api/media/vod)
+          test "$code" = 200 || { echo "VOD FFmpeg failed: $code"; head -c 1000 /tmp/vod; exit 1; }
+          head -c 1000 /tmp/vod | grep -q ftyp
+          grep -a -q moof /tmp/vod
+          echo "Render API VOD delivered fragmented MP4"
+      - name: Test cross-origin public HLS
+        run: |
+          set -euo pipefail
+          curl -sS --fail-with-body --max-time 65 \
+            -H 'Origin: https://devsouza208.github.io' \
+            --get --data-urlencode 'url=https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8' \
+            -o /tmp/playlist https://lux-player-iptv-api.onrender.com/api/media/proxy
+          grep -q 'https://lux-player-iptv-api.onrender.com/api/media/proxy' /tmp/playlist
+          echo 'Render API HLS manifest has absolute backend segment URLs'
