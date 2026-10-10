@@ -19,6 +19,7 @@ load_dotenv(ROOT_DIR / '.env')
 from lib.db import client, db, ensure_indexes
 from routers.playlists import router as playlists_router
 from routers.media import router as media_router
+from routers.vod import router as vod_router
 
 
 # Startup runs before the yield, shutdown after it. Add your own setup/teardown here.
@@ -36,6 +37,7 @@ app = FastAPI(lifespan=lifespan)
 api_router = APIRouter(prefix="/api")
 api_router.include_router(playlists_router)
 api_router.include_router(media_router)
+api_router.include_router(vod_router)
 
 
 # Define Models
