@@ -4,7 +4,8 @@ import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { apiGetStream, apiPost } from "@/lib/api";
+import { apiPost } from "@/lib/api";
+import { importRemotePlaylist } from "@/lib/playlistGateway";
 import { normalizeRemoteItems, parseM3UAsync, parseM3UStream } from "@/lib/playlist";
 import { createLocalId } from "@/lib/storage";
 import type { PlaylistParseResult, PlaylistRecord, MediaItem } from "@/lib/luxTypes";
@@ -32,7 +33,7 @@ export default function ImportCenter({ onClose, onImported }: ImportCenterProps)
   };
 
   const urlImport = useMutation({
-    mutationFn: () => apiGetStream(`/playlists/proxy?url=${encodeURIComponent(url.trim())}`),
+    mutationFn: () => importRemotePlaylist(url.trim()),
     onSuccess: async (stream) => { const playlistId = createLocalId("playlist"); const parsed = await parseM3UStream(stream, playlistId); finish(parsed.items, name || "Playlist remota", "url"); if (parsed.truncated) toast.warning("A fonte ultrapassou 500.000 itens; importamos esse limite de segurança."); },
     onError: (mutationError: Error) => setError(mutationError.message || "Não foi possível carregar essa URL."),
   });
