@@ -4,7 +4,7 @@ import { Captions, Check, ChevronLeft, Expand, Languages, ListVideo, Pause, Pict
 import { Button } from "@/components/ui/button";
 import type { MediaItem, WatchProgress } from "@/lib/luxTypes";
 import { formatTime } from "@/lib/playlist";
-import { mediaPlaybackUrl, mediaProxyUrl } from "@/lib/media";
+import { mediaPlaybackUrl, mediaProxyUrl, mediaVodFallbackUrl } from "@/lib/media";
 import { API_BASE } from "@/lib/apiOrigin";
 
 interface LuxPlayerProps {
@@ -52,8 +52,13 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
     const path = new URL(item.streamUrl).pathname.toLowerCase();
     const isHls = path.endsWith(".m3u8") || item.containerExtension?.toLowerCase() === "m3u8";
     const isTransportStream = path.endsWith(".ts") || item.containerExtension?.toLowerCase() === "ts";
+    const isVod = item.kind !== "live";
     const preferWebm = video.canPlayType('video/mp4; codecs="avc1.640028, mp4a.40.2"') === "";
-    let playbackUrl = mediaPlaybackUrl(item.streamUrl, item.containerExtension, preferWebm);
+    // Regular MP4/WebM goes through the byte-range-aware proxy. Only VOD that
+    // fails decoding retries via the NEW server-side MKV/HEVC transcoder.
+    let playbackUrl = isVod && playbackAttempt > 0
+      ? mediaVodFallbackUrl(item.streamUrl)
+      : mediaPlaybackUrl(item.streamUrl, item.containerExtension, preferWebm);
 
     // Some providers expose transport streams through URLs without a .ts suffix.
     // If the initial proxy stalls, retry using FFmpeg, which already works in Emergent.
@@ -73,10 +78,13 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
 
     const retryOrFail = (reason: string) => {
       if (disposed) return;
-      if (playbackAttempt < 2) {
+      const maxRetries = isVod ? 1 : 2;
+      if (playbackAttempt < maxRetries) {
         setPlaybackAttempt((old) => old + 1);
       } else {
-        setPlaybackError(reason);
+        setPlaybackError(isVod
+          ? `${reason} Se o episódio estiver em MKV/HEVC, o servidor precisa da rota de conversão VOD.`
+          : reason);
         setPlaybackState("error");
       }
     };
@@ -165,7 +173,7 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
         lastSeenPosition = video.currentTime;
         lastMovementAt = Date.now();
       }
-      if (Date.now() - lastMovementAt > 28000 && !awaitingUserGesture && !video.ended) {
+      if (Date.now() - lastMovementAt > (isVod ? 50000 : 28000) && !awaitingUserGesture && !video.ended) {
         lastMovementAt = Date.now();
         retryOrFail("O canal não enviou vídeo por tempo suficiente. Verifique o servidor de streaming.");
       }
@@ -210,8 +218,8 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
 
   return <div ref={playerRef} className="fixed inset-0 z-[100] flex items-center justify-center bg-black" onMouseMove={revealControls} onTouchStart={revealControls} data-testid="lux-player-overlay">
     <video ref={videoRef} playsInline controls={false} className="size-full object-contain" poster={mediaProxyUrl(item.poster || item.logo)} data-testid="lux-player-video" />
-    {playbackState === "loading" && <div className="absolute inset-0 flex items-center justify-center bg-black/50" data-testid="player-loading-state"><div className="text-center"><div className="mx-auto size-10 animate-spin rounded-full border-2 border-white/20 border-t-purple-400" /><p className="mt-4 text-sm text-zinc-300">{playbackAttempt ? "Reconectando ao canal..." : "Preparando o canal com segurança..."}</p></div></div>}
-    {playbackState === "error" && <div className="absolute inset-0 flex items-center justify-center bg-black/80 px-6" data-testid="player-error-state"><div className="max-w-md text-center"><h3 className="font-heading text-2xl font-semibold">Este canal não respondeu</h3><p className="mt-2 text-sm leading-6 text-zinc-400">{playbackError || "Não foi possível iniciar este canal."}</p><Button onClick={() => setPlaybackAttempt(0)} className="mt-5 mr-3 bg-white text-black hover:bg-zinc-200" data-testid="player-retry-button">Tentar novamente</Button><Button onClick={onClose} className="mt-5 bg-purple-600 text-white hover:bg-purple-500" data-testid="player-error-close-button">Voltar ao catálogo</Button></div></div>}
+    {playbackState === "loading" && <div className="absolute inset-0 flex items-center justify-center bg-black/50" data-testid="player-loading-state"><div className="text-center"><div className="mx-auto size-10 animate-spin rounded-full border-2 border-white/20 border-t-purple-400" /><p className="mt-4 text-sm text-zinc-300">{playbackAttempt ? (item.kind === "live" ? "Reconectando ao canal..." : "Preparando outro formato de vídeo...") : (item.kind === "live" ? "Preparando o canal com segurança..." : "Preparando episódio...")}</p></div></div>}
+    {playbackState === "error" && <div className="absolute inset-0 flex items-center justify-center bg-black/80 px-6" data-testid="player-error-state"><div className="max-w-md text-center"><h3 className="font-heading text-2xl font-semibold">{item.kind === "live" ? "Este canal não respondeu" : "Não foi possível reproduzir este episódio"}</h3><p className="mt-2 text-sm leading-6 text-zinc-400">{playbackError || "Não foi possível iniciar este canal."}</p><Button onClick={() => setPlaybackAttempt(0)} className="mt-5 mr-3 bg-white text-black hover:bg-zinc-200" data-testid="player-retry-button">Tentar novamente</Button><Button onClick={onClose} className="mt-5 bg-purple-600 text-white hover:bg-purple-500" data-testid="player-error-close-button">Voltar ao catálogo</Button></div></div>}
     {needsClick && playbackState === "ready" && <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30"><Button onClick={togglePlay} size="lg" className="bg-purple-600 text-white hover:bg-purple-500">Reproduzir canal</Button></div>}
     <div className={`pointer-events-none absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/90 transition-opacity duration-300 ${controlsVisible ? "opacity-100" : "opacity-0"}`} />
     <div className={`absolute inset-x-0 top-0 flex items-center justify-between p-4 transition-opacity duration-300 sm:p-7 ${controlsVisible ? "opacity-100" : "pointer-events-none opacity-0"}`}>
