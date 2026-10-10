@@ -37,6 +37,8 @@ if (!hotReloadDisabled) {
 export default defineConfig(async () => {
   const emergentOverlay = await loadEmergentOverlay();
   return {
+    // GitHub Pages serves project sites from a subdirectory; Emergent stays at /.
+    base: process.env.GITHUB_PAGES === "true" ? "/Lux-Player-3.0/" : "/",
     plugins: [
       react(),
       tailwindcss(),
