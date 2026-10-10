@@ -4,10 +4,8 @@ import { API_BASE, API_ORIGIN } from "@/lib/apiOrigin";
 const proxyPath = (route: "proxy" | "remux", url: string) =>
   `${API_BASE}/media/${route}?url=${encodeURIComponent(url)}`;
 
-/**
- * Artwork doesn't need the video proxy: browsers can display ordinary HTTPS
- * images cross-origin. Github Pages has no /api/media route; sending *every*
- * logo through it produced dozens of 404s after M3U import.
+/** Prefer direct HTTPS images (fast, zero backend bandwidth).
+ * HTTP artwork must go through HTTPS proxy when backend exists.
  */
 export function mediaProxyUrl(url?: string | null): string | undefined {
   if (!url) return undefined;
@@ -17,18 +15,31 @@ export function mediaProxyUrl(url?: string | null): string | undefined {
   if (parsed.protocol === "https:") return parsed.toString();
   if (parsed.protocol !== "http:") return undefined;
 
-  // Once our independent FastAPI is deployed, it can fetch HTTP artwork.
   if (API_ORIGIN) return proxyPath("proxy", url);
 
-  // Browsers block HTTP artwork from HTTPS Pages. Try the secure version,
-  // and let the image's onError handler reveal the built-in gradient fallback.
+  // Last-resort secure upgrade when no backend is configured.
   parsed.protocol = "https:";
   return parsed.toString();
 }
 
+/** An origin with an expired/untrusted TLS certificate is not accessible
+ * to the browser, but our media backend can fetch it. Retry only once,
+ * then reveal the card's gradient when the upstream image is unavailable.
+ */
 export function handleMediaImageError(event: SyntheticEvent<HTMLImageElement>) {
-  // Prevent broken-image icons from covering the placeholder gradient.
-  event.currentTarget.style.display = "none";
+  const img = event.currentTarget;
+  const failedUrl = img.currentSrc || img.src;
+  if (API_ORIGIN && img.dataset.luxProxyAttempted !== "yes") {
+    try {
+      const failed = new URL(failedUrl);
+      if (failed.protocol === "https:" && failed.origin !== API_ORIGIN) {
+        img.dataset.luxProxyAttempted = "yes";
+        img.src = proxyPath("proxy", failed.toString());
+        return;
+      }
+    } catch { /* Invalid artwork URLs should use the gradient. */ }
+  }
+  img.style.display = "none";
 }
 
 export function mediaPlaybackUrl(url: string, extension?: string | null, preferWebm = false): string {
