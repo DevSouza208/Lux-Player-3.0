@@ -1,5 +1,7 @@
+import { API_BASE } from "@/lib/apiOrigin";
+
 const proxyPath = (route: "proxy" | "remux", url: string) =>
-  `/api/media/${route}?url=${encodeURIComponent(url)}`;
+  `${API_BASE}/media/${route}?url=${encodeURIComponent(url)}`;
 
 export function mediaProxyUrl(url?: string | null): string | undefined {
   if (!url || !/^https?:\/\//i.test(url)) return url || undefined;
