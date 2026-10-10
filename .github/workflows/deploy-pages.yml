@@ -43,6 +43,7 @@ jobs:
         working-directory: frontend
         env:
           GITHUB_PAGES: 'true'
+          VITE_API_ORIGIN: ${{ vars.LUX_API_ORIGIN }}
         run: yarn build
       - name: Support SPA routes
         run: |
