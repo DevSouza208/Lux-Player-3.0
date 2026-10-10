@@ -45,8 +45,9 @@ jobs:
           GITHUB_PAGES: 'true'
           # Playlist-only backend while FastAPI Docker isn't deployed.
           VITE_M3U_GATEWAY_URL: 'https://dntqnwiyelvnukwptosn.supabase.co/functions/v1/lux-playlist-import'
-          # FFmpeg and Xtream still need the standalone backend, when deployed.
-          VITE_API_ORIGIN: ${{ vars.LUX_API_ORIGIN }}
+          # Temporary original FastAPI until own Docker backend is deployed.
+          # Set LUX_API_ORIGIN on GitHub to migrate away from Emergent without frontend changes.
+          VITE_API_ORIGIN: ${{ vars.LUX_API_ORIGIN || 'https://playlist-streamer-10.preview.emergentagent.com' }}
         run: yarn build
       - name: Support SPA routes
         run: |
