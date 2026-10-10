@@ -1,0 +1,21 @@
+{
+  "passed": 9,
+  "failed": 0,
+  "bugs": [],
+  "action_items": [
+    "The existing exploratory invalid-URL browser check remains unresolved: /api/playlists/proxy streams a 200 response before upstream connection failure, so the modal can remain in 'Carregando catálogo...' instead of rendering an error. This is outside the supplied acceptance matrix's valid URL flow.",
+    "Player console warning observed: LuxPlayer renders an empty subtitle track src; PiP can reject when stream metadata is unavailable. Controls remain present and the valid UI flow passed."
+  ],
+  "retest_needed": false,
+  "checks": [
+    {"criterion":"Criar perfil local e entrar no app","name":"profile-create-switch","lane":"browser","status":"passed","evidence":"Public preview: created/entered a local profile, opened profile selector; profile-gate-title visible."},
+    {"criterion":"Importar playlist M3U/M3U8 por arquivo","name":"m3u-file-import-catalog","lane":"browser","status":"passed","evidence":"Uploaded tscheck-library.m3u; catalog-content, hero-title 'tscheck Filme', and S01E01 item rendered."},
+    {"criterion":"Importar playlist por URL","name":"playlist-url-imports-catalog","lane":"browser","status":"passed","evidence":"Loaded remote br.m3u through UI; catalog-content rendered, overlay closed, Ao vivo agora rail visible."},
+    {"criterion":"Importar playlist por URL","name":"test_tscheck_playlist_url.py","lane":"backend","status":"passed","evidence":"HTTP POST /api/playlists/parse-url returned 200 with source_type=m3u and non-empty items; missing URL returned 422. pytest: 2 passed."},
+    {"criterion":"Navegar por categorias e Minha lista","name":"categories-and-my-list","lane":"browser","status":"passed","evidence":"Movies, Series and Minha lista navigation rendered; item was added and displayed in Minha lista."},
+    {"criterion":"Persistir no IndexedDB","name":"indexeddb-persistence","lane":"browser","status":"passed","evidence":"Imported item, reloaded SPA, and persisted hero/catalog plus 'IndexedDB ativo neste dispositivo' remained visible."},
+    {"criterion":"Abrir player premium","name":"premium-player-controls","lane":"browser","status":"passed","evidence":"Player overlay opened; play, mute, speed, captions, PiP and fullscreen controls were visible/interactive; close returned to catalog."},
+    {"criterion":"Continuar assistindo e próximo episódio","name":"continue-next-episode","lane":"browser","status":"passed","evidence":"M3U S01E01/S01E02 opened player with player-next-button; clicking it changed title to S01E02."},
+    {"criterion":"Trocar perfil com PIN opcional","name":"pin-profile-switch","lane":"browser","status":"passed","evidence":"Created PIN profile, opened selector, PIN form appeared, correct PIN unlocked back to Lux header."}
+  ]
+}

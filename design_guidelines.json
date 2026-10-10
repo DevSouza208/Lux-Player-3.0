@@ -1,0 +1,114 @@
+{
+  "theme": "dark",
+  "typography": {
+    "fonts": {
+      "headings": "Outfit, sans-serif",
+      "body": "Outfit, sans-serif"
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight",
+      "h3": "text-xl sm:text-2xl font-medium",
+      "body": "text-base leading-relaxed text-zinc-300",
+      "small": "text-sm text-zinc-400"
+    },
+    "rules": [
+      "No generic fonts like Inter, Roboto, Open Sans, or Space Grotesk for headings.",
+      "Use tight letter spacing for large text to maintain a cinematic, premium feel.",
+      "Do not use uppercase for standard body text."
+    ]
+  },
+  "colors": {
+    "primary": {
+      "DEFAULT": "#9333EA",
+      "hover": "#A855F7",
+      "active": "#7E22CE"
+    },
+    "background": {
+      "base": "#000000",
+      "surface": "#09090B",
+      "card": "#18181B",
+      "glass": "rgba(0, 0, 0, 0.6)"
+    },
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#A1A1AA",
+      "inverse": "#000000"
+    },
+    "rules": [
+      "Use pure black (#000000) for the main background to get a true theater feel.",
+      "Use #9333EA (Purple 600) as primary accent for CTAs, active states, and progress bars.",
+      "FORBIDDEN COLOR: #7351B7. Do not use this exact hex.",
+      "FORBIDDEN COLOR: #1B93A4 (Teal green/blue). Do not use for dashboards or UI elements.",
+      "Always tint neutral greys towards a cool tone to complement the purple (Zinc is preferred over Gray/Neutral)."
+    ]
+  },
+  "visual_enhancers": {
+    "surfaces": "Use subtle glassmorphism (backdrop-blur-xl bg-black/60) on the sticky navigation and player overlays. CRITICAL: Never use pure transparent backgrounds if content scrolls underneath.",
+    "shadows": "Use deep purple glow shadows on hover for featured content, e.g., shadow-[0_0_20px_rgba(147,51,234,0.3)].",
+    "borders": "1px border-white/10 on cards and dialogs for crisp edges in the dark UI."
+  },
+  "components": {
+    "navigation": "Sticky top bar with Logo, navigation links (Live, Movies, Series, My List), and Profile switcher. Must use glassmorphism.",
+    "hero_carousel": "Large cinematic hero banner at the top showing a featured item from the playlist. Must have a dark gradient overlay at the bottom (bg-gradient-to-t from-black via-black/50 to-transparent) to blend into the rows without washing out the image.",
+    "content_rows": "Horizontal scrollable rails. Posters should scale up on hover (scale-105) with a smooth transition. Use Aspect ratio 2:3 for Movies/Series and 16:9 for Live TV/Episodes.",
+    "player": "Custom HTML5 player overlay or dedicated full-screen route. Custom controls overlapping video: Play/Pause, Volume, Timeline/Progress, Next Episode, Subtitles, PIP, Speed, Alternate Audio.",
+    "profiles": "Full-screen profile selector on app launch, similar to Netflix 'Who's watching?'. Support avatars/emojis and optional PIN.",
+    "forms": "Use a dark, immersive Bento grid style for the M3U/XStream configuration and playlist import forms."
+  },
+  "layouts": {
+    "app": "Mobile-first, responsive grids. Main catalog uses full width with padded edges (px-4 md:px-8 lg:px-12).",
+    "catalog": "Grid layouts must be strictly aligned. Horizontal scrolling rows (flex overflow-x-auto or carousels) should hide default scrollbars (scrollbar-hide).",
+    "player_overlay": "Absolute positioned, full-viewport z-50 overlay when watching content."
+  },
+  "motion": {
+    "transitions": "Use Framer Motion. Smooth fades between routes and subtle stagger animations for catalog rows.",
+    "hover_states": "Hovering over a movie card smoothly scales it up (duration-300 ease-out) and reveals quick actions.",
+    "player_controls": "Player controls fade out after 3 seconds of inactivity and fade in on mouse move."
+  },
+  "accessibility": {
+    "contrast": "Ensure all text over images uses text-shadow or gradient underlays for APCA/WCAG AA compliance.",
+    "focus": "focus:ring-2 focus:ring-purple-500 focus:outline-none on all interactive elements. Do not remove focus outlines completely.",
+    "aria": "Include ARIA labels on all player controls (e.g., 'Play Video', 'Toggle Fullscreen')."
+  },
+  "media": {
+    "video_player": "Use HTML5 <video> combined with 'hls.js' for robust M3U8/HLS playback support. Ensure video element has playsInline and seamless UI overlays."
+  },
+  "image_urls": {
+    "profile_1": {
+      "url": "https://images.unsplash.com/photo-1740252117013-4fb21771e7ca?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2ODh8MHwxfHNlYXJjaHw0fHxtaW5pbWFsaXN0JTIwM2QlMjBhdmF0YXIlMjBwb3J0cmFpdHxlbnwwfHx8fDE3OTE2NDczMzF8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Minimalist 3D character with blue hat",
+      "category": "avatars"
+    },
+    "profile_2": {
+      "url": "https://images.unsplash.com/photo-1740252117027-4275d3f84385?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2ODh8MHwxfHNlYXJjaHwzfHxtaW5pbWFsaXN0JTIwM2QlMjBhdmF0YXIlMjBwb3J0cmFpdHxlbnwwfHx8fDE3OTE2NDczMzF8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Minimalist 3D character with purple hair/glasses",
+      "category": "avatars"
+    },
+    "profile_3": {
+      "url": "https://images.unsplash.com/photo-1740252117070-7aa2955b25f8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2ODh8MHwxfHNlYXJjaHwyfHxtaW5pbWFsaXN0JTIwM2QlMjBhdmF0YXIlMjBwb3J0cmFpdHxlbnwwfHx8fDE3OTE2NDczMzF8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Minimalist 3D character with striped shirt",
+      "category": "avatars"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Build the application using React (.js/.jsx files ONLY - do not use TypeScript/tsx).",
+    "Use IndexedDB (e.g., via 'idb' or 'localforage' libraries) for storing all state: profiles, loaded playlists, parsed catalog, 'Continue Watching' progress, 'My List', and playback state. This is a hard requirement for later migration to Cloudflare D1.",
+    "Implement the UI with a strict Netflix/Disney+ layout: A large Hero section at the top, followed by horizontal scrolling rails for Live, Movies, Series, and Continue Watching.",
+    "The app has NO demo fallback content. If the IndexedDB is empty, show a premium 'Welcome' or 'Profiles' screen to configure a profile and import an M3U/M3U8/XStream list.",
+    "For the video player, implement a fully custom HTML5 UI layered over the <video> element. Use 'hls.js' to parse and play M3U8 streams directly in the browser.",
+    "Support parsing of broad playlist formats (M3U/M3U8 file upload, URL, XStream config) and categorizing them into Live TV, Movies, and Series/Episodes.",
+    "Ensure all components from shadcn/ui are properly integrated in JavaScript.",
+    "Use standard emojis or the provided image URLs as default avatars for the 4 profiles."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Do not use generic centered layouts. Follow the design system strictly with left-aligned sections and varied grids.",
+    "CRITICAL: All interactive and key informational elements MUST include a 'data-testid' attribute to facilitate robust automated testing (e.g., data-testid='profile-select-button').",
+    "Create depth through layered design elements with z-index hierarchy and glass-morphism (backdrop-blur-xl).",
+    "Never apply universal transitions (transition: all). Target specific properties (e.g., transition-transform, transition-opacity) to avoid breaking rendering.",
+    "Do not center-align the app container (.App { text-align: center; } is strictly banned).",
+    "Use modern pill-shaped or rounded-md buttons with clear interaction animations and the defined purple primary color.",
+    "Use sonner for toasts, located in /app/frontend/src/components/ui/sonner.js or similar standard path.",
+    "Never use AI assistant Emoji characters (🤖, 🧠, etc.) for UI icons. Use lucide-react."
+  ]
+}

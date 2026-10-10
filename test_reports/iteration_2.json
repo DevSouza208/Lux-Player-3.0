@@ -1,0 +1,44 @@
+{
+  "passed": 5,
+  "failed": 0,
+  "bugs": [],
+  "action_items": [],
+  "retest_needed": false,
+  "checks": [
+    {
+      "criterion": "Importar playlist válida por URL sem travar ou retornar 502",
+      "name": "playlist-url-imports-catalog",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-run of persisted check: loaded remote br.m3u through UI; catalog-content rendered, overlay closed, Ao vivo agora rail visible."
+    },
+    {
+      "criterion": "Importar playlist válida por URL sem travar ou retornar 502",
+      "name": "manual_large_url_proxy_cross_check",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "curl GET /api/playlists/proxy?url=<p2pro.space large m3u_plus URL> -> HTTP_CODE:200, SIZE:104855619 bytes, TIME:29.58s (under --max-time 60). No 502, response streamed and completed; body begins with valid #EXTM3U content confirming upstream validated before StreamingResponse."
+    },
+    {
+      "criterion": "Tratar URL de playlist inválida sem carregamento infinito",
+      "name": "playlist-invalid-url-error",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-run of persisted check passed: invalid remote URL produced a 400 Bad Request surfaced before streaming; modal exits 'Carregando catálogo...' and shows the error message. One console entry logged the 400 response (expected, non-blocking)."
+    },
+    {
+      "criterion": "Abrir player premium sem avisos evitáveis",
+      "name": "premium-player-controls",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-run of persisted check passed: player overlay opened with play, mute, speed, captions, PiP and fullscreen controls visible/interactive; closed cleanly back to catalog with no failing console errors."
+    },
+    {
+      "criterion": "Profile flow regression guard (supporting check re-verified alongside retest scope)",
+      "name": "profile-create-switch",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-run of persisted check passed: created/entered a local profile via public preview, profile selector and profile-gate-title visible."
+    }
+  ]
+}
