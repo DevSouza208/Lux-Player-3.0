@@ -40,3 +40,34 @@ jobs:
           grep -Fq '/api/media/proxy?url=' /tmp/test.m3u8
           grep -Eiq 'access-control-allow-origin: (\*|https://devsouza208.github.io)' /tmp/response-headers.txt
           echo "Lux HLS rewrites and CORS: OK"
+
+      - name: Verify FFmpeg remux on public MPEG-TS demo segment
+        run: |
+          set -euo pipefail
+          python - <<'PY' > /tmp/lux-ts-demo.txt
+          from urllib.request import urlopen
+          from urllib.parse import urljoin
+          url = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
+          def non_comment_lines(uri):
+              content = urlopen(uri, timeout=15).read().decode("utf-8-sig")
+              return [line.strip() for line in content.splitlines() if line.strip() and not line.startswith("#")]
+          playlist = urljoin(url, non_comment_lines(url)[0])
+          segment = urljoin(playlist, non_comment_lines(playlist)[0])
+          if not segment.endswith(".ts"):
+              raise SystemExit("Expected a public MPEG-TS segment")
+          print(segment)
+          PY
+          source="$(cat /tmp/lux-ts-demo.txt)"
+          status=$(curl --silent --show-error --max-time 60 \
+            -H 'Origin: https://devsouza208.github.io' \
+            -D /tmp/lux-remux-headers.txt \
+            -o /tmp/lux-remux.mp4 \
+            -w '%{http_code}' \
+            --get --data-urlencode "url=$source" \
+            'https://playlist-streamer-10.preview.emergentagent.com/api/media/remux')
+          echo "Remux HTTP: $status"
+          test "$status" = "200"
+          test "$(wc -c < /tmp/lux-remux.mp4)" -gt 4096
+          grep -Eiq 'content-type: video/mp4' /tmp/lux-remux-headers.txt
+          head -c 1024 /tmp/lux-remux.mp4 | grep -q 'ftyp'
+          echo 'Lux FFmpeg MPEG-TS remux: OK'
