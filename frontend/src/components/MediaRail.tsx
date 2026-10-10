@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { MediaItem } from "@/lib/luxTypes";
-import { mediaProxyUrl } from "@/lib/media";
+import { handleMediaImageError, mediaProxyUrl } from "@/lib/media";
 
 interface MediaRailProps {
   title: string;
@@ -25,7 +25,7 @@ export default function MediaRail({ title, items, landscape, myList, onPlay, onT
     <div className="scrollbar-hide flex gap-3 overflow-x-auto px-5 pb-4 sm:gap-4 sm:px-8 lg:px-12">
       {displayItems.map((item, index) => <motion.article key={item.id} initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(index * 0.025, 0.2) }} className={`group relative shrink-0 overflow-hidden rounded-xl border border-white/10 bg-zinc-900 shadow-lg transition-transform duration-300 hover:-translate-y-1 hover:border-purple-400/60 hover:shadow-[0_0_26px_rgba(147,51,234,0.22)] ${landscape ? "w-64 sm:w-80" : "w-36 sm:w-44"}`} data-testid={`media-card-${item.id}`}>
         <div className={`relative overflow-hidden bg-gradient-to-br from-purple-950 via-zinc-900 to-black ${landscape ? "aspect-video" : "aspect-[2/3]"}`}>
-          {(item.poster || item.logo) && <img src={mediaProxyUrl(item.poster || item.logo)} alt="" loading="lazy" className="absolute inset-0 size-full object-cover opacity-90 transition-transform duration-500 group-hover:scale-105" />}
+          {(item.poster || item.logo) && <img onError={handleMediaImageError} src={mediaProxyUrl(item.poster || item.logo)} alt="" loading="lazy" className="absolute inset-0 size-full object-cover opacity-90 transition-transform duration-500 group-hover:scale-105" />}
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent" />
           <div className="absolute top-3 left-3"><Badge className="border-white/10 bg-black/60 text-[10px] text-zinc-200 backdrop-blur" data-testid={`media-kind-${item.id}`}>{item.kind === "live" ? "AO VIVO" : item.kind === "series" ? "SÉRIE" : "FILME"}</Badge></div>
           <div className="absolute inset-x-3 bottom-3 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
