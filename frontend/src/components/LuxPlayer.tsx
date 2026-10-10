@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import type { MediaItem, WatchProgress } from "@/lib/luxTypes";
 import { formatTime } from "@/lib/playlist";
 import { mediaPlaybackUrl, mediaProxyUrl } from "@/lib/media";
+import { API_BASE } from "@/lib/apiOrigin";
 
 interface LuxPlayerProps {
   item: MediaItem;
@@ -27,6 +28,9 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
   const [speed, setSpeed] = useState("1");
   const [captions, setCaptions] = useState(false);
   const [playbackState, setPlaybackState] = useState<"loading" | "ready" | "error">("loading");
+  const [playbackAttempt, setPlaybackAttempt] = useState(0);
+  const [playbackError, setPlaybackError] = useState("");
+  const [needsClick, setNeedsClick] = useState(false);
   const hideTimer = useRef<number | undefined>(undefined);
 
   const revealControls = () => {
@@ -38,59 +42,163 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    setPlaybackState("loading");
+    let disposed = false;
     let hls: Hls | undefined;
-    const isHls = item.streamUrl.toLowerCase().includes(".m3u8") || item.containerExtension === "m3u8";
+    let lastMovementAt = Date.now();
+    let lastSeenPosition = 0;
+    let attemptedAutoplay = false;
+    let awaitingUserGesture = false;
+    let initialVideoError = false;
+    const path = new URL(item.streamUrl).pathname.toLowerCase();
+    const isHls = path.endsWith(".m3u8") || item.containerExtension?.toLowerCase() === "m3u8";
+    const isTransportStream = path.endsWith(".ts") || item.containerExtension?.toLowerCase() === "ts";
     const preferWebm = video.canPlayType('video/mp4; codecs="avc1.640028, mp4a.40.2"') === "";
-    const playbackUrl = mediaPlaybackUrl(item.streamUrl, item.containerExtension, preferWebm);
-    if (isHls && Hls.isSupported()) {
-      hls = new Hls({ enableWorker: true, lowLatencyMode: true });
-      hls.loadSource(playbackUrl);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.ERROR, (_event, data) => { if (data.fatal) setPlaybackState("error"); });
-    } else {
-      video.src = playbackUrl;
+    let playbackUrl = mediaPlaybackUrl(item.streamUrl, item.containerExtension, preferWebm);
+
+    // Some providers expose transport streams through URLs without a .ts suffix.
+    // If the initial proxy stalls, retry using FFmpeg, which already works in Emergent.
+    if (playbackAttempt > 0 && !isHls) {
+      if (isTransportStream) {
+        playbackUrl = mediaPlaybackUrl(item.streamUrl, item.containerExtension, !preferWebm);
+      } else if (item.kind === "live") {
+        playbackUrl = `${API_BASE}/media/remux?url=${encodeURIComponent(item.streamUrl)}${playbackAttempt === 2 ? "&output=webm" : ""}`;
+      }
     }
-    video.volume = volume;
-    video.muted = muted;
+
+    setPlaybackState("loading");
+    setPlaybackError("");
+    setNeedsClick(false);
+    setPaused(true);
+    setCurrent(0);
+
+    const retryOrFail = (reason: string) => {
+      if (disposed) return;
+      if (playbackAttempt < 2) {
+        setPlaybackAttempt((old) => old + 1);
+      } else {
+        setPlaybackError(reason);
+        setPlaybackState("error");
+      }
+    };
+    const requestPlay = () => {
+      if (disposed || attemptedAutoplay) return;
+      attemptedAutoplay = true;
+      void video.play().then(() => {
+        if (!disposed) setNeedsClick(false);
+      }).catch(() => {
+        // Browser autoplay policies can require an explicit click.
+        if (!disposed) {
+          awaitingUserGesture = true;
+          setNeedsClick(true);
+          setPlaybackState("ready");
+        }
+      });
+    };
     const onLoaded = () => {
+      if (disposed) return;
       setPlaybackState("ready");
+      lastMovementAt = Date.now();
       const startAt = progress?.position && progress.position < (video.duration || Infinity) - 8 ? progress.position : 0;
-      if (startAt > 0) video.currentTime = startAt;
-      setDuration(video.duration || progress?.duration || 0);
+      if (startAt > 0 && Number.isFinite(video.duration)) video.currentTime = startAt;
+      setDuration(Number.isFinite(video.duration) ? video.duration : progress?.duration || 0);
+      requestPlay();
     };
     const onTime = () => {
+      if (disposed) return;
       setCurrent(video.currentTime);
-      if (video.duration) setDuration(video.duration);
+      if (Number.isFinite(video.duration) && video.duration > 0) setDuration(video.duration);
+      if (video.currentTime > lastSeenPosition + 0.15) {
+        lastSeenPosition = video.currentTime;
+        lastMovementAt = Date.now();
+      }
       onProgress(video.currentTime, video.duration || duration);
     };
-    const onPlay = () => setPaused(false);
+    const onPlay = () => { setPaused(false); setNeedsClick(false); };
     const onPause = () => setPaused(true);
-    const onCanPlay = () => setPlaybackState("ready");
-    const onError = () => setPlaybackState("error");
+    const onCanPlay = () => { setPlaybackState("ready"); requestPlay(); };
+    const onPlaying = () => { setPlaybackState("ready"); lastMovementAt = Date.now(); };
+    const onWaiting = () => { if (!video.paused && !disposed) setPlaybackState("loading"); };
+    const onError = () => {
+      if (disposed || initialVideoError) return;
+      initialVideoError = true;
+      const code = video.error?.code;
+      retryOrFail(code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED
+        ? "Formato de vídeo não compatível com este navegador."
+        : "O servidor interrompeu a transmissão do canal.");
+    };
+
     video.addEventListener("loadedmetadata", onLoaded);
     video.addEventListener("timeupdate", onTime);
     video.addEventListener("play", onPlay);
     video.addEventListener("pause", onPause);
     video.addEventListener("canplay", onCanPlay);
+    video.addEventListener("playing", onPlaying);
+    video.addEventListener("waiting", onWaiting);
+    video.addEventListener("stalled", onWaiting);
     video.addEventListener("error", onError);
-    return () => {
-      hls?.destroy();
-      video.pause();
-      video.removeAttribute("src");
+
+    video.preload = "auto";
+    video.volume = volume;
+    video.muted = muted;
+    if (isHls && Hls.isSupported()) {
+      hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal) {
+          retryOrFail(data.type === Hls.ErrorTypes.NETWORK_ERROR
+            ? "Não foi possível receber os segmentos HLS do canal."
+            : "O navegador não conseguiu decodificar o vídeo.");
+        }
+      });
+      hls.attachMedia(video);
+      hls.loadSource(playbackUrl);
+    } else {
+      video.src = playbackUrl;
       video.load();
+    }
+
+    // A media request can hang without firing video/error. Never spin forever:
+    // after 28 s with no decoded frame, switch transport or reconnect (max 2).
+    const watchdog = window.setInterval(() => {
+      if (disposed) return;
+      if (video.paused && video.currentTime > 0) return;
+      if (video.currentTime > lastSeenPosition + 0.15) {
+        lastSeenPosition = video.currentTime;
+        lastMovementAt = Date.now();
+      }
+      if (Date.now() - lastMovementAt > 28000 && !awaitingUserGesture && !video.ended) {
+        lastMovementAt = Date.now();
+        retryOrFail("O canal não enviou vídeo por tempo suficiente. Verifique o servidor de streaming.");
+      }
+    }, 4000);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(watchdog);
       video.removeEventListener("loadedmetadata", onLoaded);
       video.removeEventListener("timeupdate", onTime);
       video.removeEventListener("play", onPlay);
       video.removeEventListener("pause", onPause);
       video.removeEventListener("canplay", onCanPlay);
+      video.removeEventListener("playing", onPlaying);
+      video.removeEventListener("waiting", onWaiting);
+      video.removeEventListener("stalled", onWaiting);
       video.removeEventListener("error", onError);
+      hls?.destroy();
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
     };
-  }, [item.id]);
+  }, [item.id, playbackAttempt]);
 
   useEffect(() => { if (videoRef.current) videoRef.current.playbackRate = Number(speed); }, [speed]);
 
-  const togglePlay = () => { const video = videoRef.current; if (!video) return; if (video.paused) void video.play().catch(() => undefined); else video.pause(); revealControls(); };
+  const togglePlay = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) void video.play().then(() => setNeedsClick(false)).catch(() => setPlaybackError("Não foi possível iniciar o vídeo."));
+    else video.pause();
+    revealControls();
+  };
   const toggleCaptions = () => {
     setCaptions((value) => !value);
     const tracks = videoRef.current?.textTracks;
@@ -102,8 +210,9 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
 
   return <div ref={playerRef} className="fixed inset-0 z-[100] flex items-center justify-center bg-black" onMouseMove={revealControls} onTouchStart={revealControls} data-testid="lux-player-overlay">
     <video ref={videoRef} playsInline controls={false} className="size-full object-contain" poster={mediaProxyUrl(item.poster || item.logo)} data-testid="lux-player-video" />
-    {playbackState === "loading" && <div className="absolute inset-0 flex items-center justify-center bg-black/50" data-testid="player-loading-state"><div className="text-center"><div className="mx-auto size-10 animate-spin rounded-full border-2 border-white/20 border-t-purple-400" /><p className="mt-4 text-sm text-zinc-300">Preparando o canal com segurança...</p></div></div>}
-    {playbackState === "error" && <div className="absolute inset-0 flex items-center justify-center bg-black/80 px-6" data-testid="player-error-state"><div className="max-w-md text-center"><h3 className="font-heading text-2xl font-semibold">Este canal não respondeu</h3><p className="mt-2 text-sm leading-6 text-zinc-400">O Lux removeu o bloqueio de HTTP, mas o provedor não entregou um stream reproduzível agora. Tente novamente em instantes.</p><Button onClick={onClose} className="mt-5 bg-purple-600 text-white hover:bg-purple-500" data-testid="player-error-close-button">Voltar ao catálogo</Button></div></div>}
+    {playbackState === "loading" && <div className="absolute inset-0 flex items-center justify-center bg-black/50" data-testid="player-loading-state"><div className="text-center"><div className="mx-auto size-10 animate-spin rounded-full border-2 border-white/20 border-t-purple-400" /><p className="mt-4 text-sm text-zinc-300">{playbackAttempt ? "Reconectando ao canal..." : "Preparando o canal com segurança..."}</p></div></div>}
+    {playbackState === "error" && <div className="absolute inset-0 flex items-center justify-center bg-black/80 px-6" data-testid="player-error-state"><div className="max-w-md text-center"><h3 className="font-heading text-2xl font-semibold">Este canal não respondeu</h3><p className="mt-2 text-sm leading-6 text-zinc-400">{playbackError || "Não foi possível iniciar este canal."}</p><Button onClick={() => setPlaybackAttempt(0)} className="mt-5 mr-3 bg-white text-black hover:bg-zinc-200" data-testid="player-retry-button">Tentar novamente</Button><Button onClick={onClose} className="mt-5 bg-purple-600 text-white hover:bg-purple-500" data-testid="player-error-close-button">Voltar ao catálogo</Button></div></div>}
+    {needsClick && playbackState === "ready" && <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30"><Button onClick={togglePlay} size="lg" className="bg-purple-600 text-white hover:bg-purple-500">Reproduzir canal</Button></div>}
     <div className={`pointer-events-none absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/90 transition-opacity duration-300 ${controlsVisible ? "opacity-100" : "opacity-0"}`} />
     <div className={`absolute inset-x-0 top-0 flex items-center justify-between p-4 transition-opacity duration-300 sm:p-7 ${controlsVisible ? "opacity-100" : "pointer-events-none opacity-0"}`}>
       <Button variant="ghost" onClick={onClose} data-testid="player-close-button" className="pointer-events-auto text-white hover:bg-white/10"><ChevronLeft /> Voltar</Button>
