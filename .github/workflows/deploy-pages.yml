@@ -51,11 +51,9 @@ jobs:
           GITHUB_PAGES: 'true'
           # Playlist-only backend while FastAPI Docker isn't deployed.
           VITE_M3U_GATEWAY_URL: 'https://dntqnwiyelvnukwptosn.supabase.co/functions/v1/lux-playlist-import'
-          # Separate VOD server. Keep working live TV on the original API until verified.
+          # Own FastAPI/FFmpeg server. Do not reference temporary Emergent preview.
+          VITE_API_ORIGIN: 'https://lux-player-iptv-api.onrender.com'
           VITE_VOD_API_ORIGIN: 'https://lux-player-iptv-api.onrender.com'
-          # Temporary original FastAPI until own Docker backend is deployed.
-          # Set LUX_API_ORIGIN on GitHub to migrate away from Emergent without frontend changes.
-          VITE_API_ORIGIN: ${{ vars.LUX_API_ORIGIN || 'https://playlist-streamer-10.preview.emergentagent.com' }}
         run: yarn build
       - name: Support SPA routes
         run: |
