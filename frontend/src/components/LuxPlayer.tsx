@@ -4,6 +4,7 @@ import { Captions, Check, ChevronLeft, Expand, Languages, ListVideo, Pause, Pict
 import { Button } from "@/components/ui/button";
 import type { MediaItem, WatchProgress } from "@/lib/luxTypes";
 import { formatTime } from "@/lib/playlist";
+import { mediaPlaybackUrl, mediaProxyUrl } from "@/lib/media";
 
 interface LuxPlayerProps {
   item: MediaItem;
@@ -25,6 +26,7 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
   const [controlsVisible, setControlsVisible] = useState(true);
   const [speed, setSpeed] = useState("1");
   const [captions, setCaptions] = useState(false);
+  const [playbackState, setPlaybackState] = useState<"loading" | "ready" | "error">("loading");
   const hideTimer = useRef<number | undefined>(undefined);
 
   const revealControls = () => {
@@ -36,18 +38,23 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    setPlaybackState("loading");
     let hls: Hls | undefined;
     const isHls = item.streamUrl.toLowerCase().includes(".m3u8") || item.containerExtension === "m3u8";
+    const preferWebm = video.canPlayType('video/mp4; codecs="avc1.640028, mp4a.40.2"') === "";
+    const playbackUrl = mediaPlaybackUrl(item.streamUrl, item.containerExtension, preferWebm);
     if (isHls && Hls.isSupported()) {
       hls = new Hls({ enableWorker: true, lowLatencyMode: true });
-      hls.loadSource(item.streamUrl);
+      hls.loadSource(playbackUrl);
       hls.attachMedia(video);
+      hls.on(Hls.Events.ERROR, (_event, data) => { if (data.fatal) setPlaybackState("error"); });
     } else {
-      video.src = item.streamUrl;
+      video.src = playbackUrl;
     }
     video.volume = volume;
     video.muted = muted;
     const onLoaded = () => {
+      setPlaybackState("ready");
       const startAt = progress?.position && progress.position < (video.duration || Infinity) - 8 ? progress.position : 0;
       if (startAt > 0) video.currentTime = startAt;
       setDuration(video.duration || progress?.duration || 0);
@@ -59,10 +66,14 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
     };
     const onPlay = () => setPaused(false);
     const onPause = () => setPaused(true);
+    const onCanPlay = () => setPlaybackState("ready");
+    const onError = () => setPlaybackState("error");
     video.addEventListener("loadedmetadata", onLoaded);
     video.addEventListener("timeupdate", onTime);
     video.addEventListener("play", onPlay);
     video.addEventListener("pause", onPause);
+    video.addEventListener("canplay", onCanPlay);
+    video.addEventListener("error", onError);
     return () => {
       hls?.destroy();
       video.pause();
@@ -72,6 +83,8 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
       video.removeEventListener("timeupdate", onTime);
       video.removeEventListener("play", onPlay);
       video.removeEventListener("pause", onPause);
+      video.removeEventListener("canplay", onCanPlay);
+      video.removeEventListener("error", onError);
     };
   }, [item.id]);
 
@@ -88,7 +101,9 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
   const togglePip = () => { const video = videoRef.current; if (video && document.pictureInPictureEnabled && !document.pictureInPictureElement && video.readyState >= HTMLMediaElement.HAVE_METADATA) void video.requestPictureInPicture().catch(() => undefined); };
 
   return <div ref={playerRef} className="fixed inset-0 z-[100] flex items-center justify-center bg-black" onMouseMove={revealControls} onTouchStart={revealControls} data-testid="lux-player-overlay">
-    <video ref={videoRef} playsInline controls={false} className="size-full object-contain" poster={item.poster || item.logo || undefined} data-testid="lux-player-video" />
+    <video ref={videoRef} playsInline controls={false} className="size-full object-contain" poster={mediaProxyUrl(item.poster || item.logo)} data-testid="lux-player-video" />
+    {playbackState === "loading" && <div className="absolute inset-0 flex items-center justify-center bg-black/50" data-testid="player-loading-state"><div className="text-center"><div className="mx-auto size-10 animate-spin rounded-full border-2 border-white/20 border-t-purple-400" /><p className="mt-4 text-sm text-zinc-300">Preparando o canal com segurança...</p></div></div>}
+    {playbackState === "error" && <div className="absolute inset-0 flex items-center justify-center bg-black/80 px-6" data-testid="player-error-state"><div className="max-w-md text-center"><h3 className="font-heading text-2xl font-semibold">Este canal não respondeu</h3><p className="mt-2 text-sm leading-6 text-zinc-400">O Lux removeu o bloqueio de HTTP, mas o provedor não entregou um stream reproduzível agora. Tente novamente em instantes.</p><Button onClick={onClose} className="mt-5 bg-purple-600 text-white hover:bg-purple-500" data-testid="player-error-close-button">Voltar ao catálogo</Button></div></div>}
     <div className={`pointer-events-none absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/90 transition-opacity duration-300 ${controlsVisible ? "opacity-100" : "opacity-0"}`} />
     <div className={`absolute inset-x-0 top-0 flex items-center justify-between p-4 transition-opacity duration-300 sm:p-7 ${controlsVisible ? "opacity-100" : "pointer-events-none opacity-0"}`}>
       <Button variant="ghost" onClick={onClose} data-testid="player-close-button" className="pointer-events-auto text-white hover:bg-white/10"><ChevronLeft /> Voltar</Button>

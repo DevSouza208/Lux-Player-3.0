@@ -1,0 +1,72 @@
+{
+  "passed": 7,
+  "failed": 0,
+  "bugs": [],
+  "action_items": [],
+  "retest_needed": false,
+  "checks": [
+    {
+      "criterion": "Eliminar mixed content de imagens e streams HTTP",
+      "name": "image-proxy-no-mixed-content",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Imported M3U with tvg-logo=http://topfont.online:80/images/... and stream http://topfont.online:80/RehSouza208/...1698406.ts. Catalog logo <img> src resolved to same-origin /api/media/proxy?url=... ; network listener confirmed zero direct HTTP requests to any non-localhost host from the browser."
+    },
+    {
+      "criterion": "Reproduzir MPEG-TS no navegador pelo HTTPS do Lux",
+      "name": "mpegts-remux-plays-same-origin",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Imported m3u with https://test-streams.mux.dev/.../193039199_mp4_h264_aac_hd_7.ts, opened player, loading state cleared, video.currentSrc included /api/media/remux (same-origin), after play() currentTime advanced beyond 0.2s with no error-state shown. Re-verified against public preview URL https://playlist-streamer-10.preview.emergentagent.com with identical pass result."
+    },
+    {
+      "criterion": "Contornar certificado inválido do provedor sem expor HTTPS quebrado ao navegador",
+      "name": "image-proxy-no-mixed-content",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Same check as above also validates the proxy path: backend media.py uses httpx client with verify=False only server-side; browser only ever requested /api/media/proxy, never saw a cert warning or ERR_CERT_AUTHORITY_INVALID since it never contacts upstream directly."
+    },
+    {
+      "criterion": "Manter feedback quando o provedor estiver indisponível",
+      "name": "player-shows-friendly-error-on-dead-provider",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Imported m3u pointing at a non-resolving host (tscheck-nonexistent-provider-9912.invalid). Player opened, surfaced data-testid=player-error-state with 'Este canal não respondeu' message and a working 'Voltar ao catálogo' button instead of a silent black screen; closing returned to catalog-content."
+    },
+    {
+      "criterion": "Importar playlist válida por URL sem travar ou retornar 502 (regression)",
+      "name": "playlist-url-imports-catalog",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-run of persisted check: remote m3u import rendered catalog-content with Ao vivo rail."
+    },
+    {
+      "criterion": "Tratar URL de playlist inválida sem carregamento infinito (regression)",
+      "name": "playlist-invalid-url-error",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-run of persisted check: invalid remote URL returned 400 before streaming; loading state cleared and error surfaced."
+    },
+    {
+      "criterion": "Abrir player premium sem avisos evitáveis (regression)",
+      "name": "premium-player-controls",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-run of persisted check: play/mute/speed/captions/pip/fullscreen controls visible and interactive, overlay closed cleanly. One transient 502 console entry reflects known provider flakiness noted in spec_deviations, not a regression."
+    },
+    {
+      "criterion": "Profile flow regression guard",
+      "name": "profile-create-switch",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-run of persisted check: profile created/selected via public preview, profile-gate-title visible."
+    },
+    {
+      "criterion": "Backend suite (playlist proxy) regression guard",
+      "name": "test_tscheck_playlist_url.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "pytest -q on /app/backend/tests -> 2 passed in 0.55s against running server on :8001."
+    }
+  ]
+}

@@ -12,6 +12,7 @@ import { createLocalId } from "@/lib/storage";
 import { loadLuxState, saveLuxState } from "@/lib/storage";
 import { profileProgressKey } from "@/lib/luxTypes";
 import type { LuxState, MediaItem, PlaylistRecord, Profile } from "@/lib/luxTypes";
+import { mediaProxyUrl } from "@/lib/media";
 
 type View = "home" | "live" | "movies" | "series" | "my-list";
 
@@ -80,7 +81,7 @@ export default function Home() {
 
     <main className="pb-20 pt-16">
       {view === "home" && <section className="relative min-h-[560px] overflow-hidden" data-testid="home-hero-section">
-        {heroItem?.poster || heroItem?.logo ? <img src={heroItem.poster || heroItem.logo || ""} alt="" className="absolute inset-0 size-full object-cover opacity-45" data-testid="hero-background-image" /> : <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_22%,rgba(147,51,234,0.38),transparent_30%),linear-gradient(110deg,#000_22%,#160a24_70%,#050208)]" data-testid="hero-empty-background" />}
+        {heroItem?.poster || heroItem?.logo ? <img src={mediaProxyUrl(heroItem.poster || heroItem.logo)} alt="" className="absolute inset-0 size-full object-cover opacity-45" data-testid="hero-background-image" /> : <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_22%,rgba(147,51,234,0.38),transparent_30%),linear-gradient(110deg,#000_22%,#160a24_70%,#050208)]" data-testid="hero-empty-background" />}
         <div className="absolute inset-0 bg-gradient-to-r from-black via-black/70 to-transparent" /><div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-black/20" />
         <div className="relative flex min-h-[560px] items-end px-5 pb-14 sm:px-8 lg:px-12"><motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl">
           <div className="mb-5 flex items-center gap-2 text-xs font-semibold tracking-[0.24em] text-purple-300" data-testid="hero-kicker"><Sparkles className="size-4" /> LUX PLAYER</div>

@@ -18,6 +18,7 @@ load_dotenv(ROOT_DIR / '.env')
 # MongoDB connection
 from lib.db import client, db, ensure_indexes
 from routers.playlists import router as playlists_router
+from routers.media import router as media_router
 
 
 # Startup runs before the yield, shutdown after it. Add your own setup/teardown here.
@@ -34,6 +35,7 @@ app = FastAPI(lifespan=lifespan)
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 api_router.include_router(playlists_router)
+api_router.include_router(media_router)
 
 
 # Define Models

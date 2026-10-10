@@ -9,7 +9,7 @@ function classify(title: string, group: string, url: string): MediaKind {
   const haystack = `${title} ${group}`.toLowerCase();
   if (/s\d{1,2}\s*e\d{1,2}|season|temporada|series|séries/.test(haystack)) return "series";
   if (/movie|filme|vod|cinema|film/.test(haystack)) return "movie";
-  if (/live|canal|tv/.test(haystack) || url.toLowerCase().includes(".m3u8")) return "live";
+  if (/live|canal|canais|tv/.test(haystack) || url.toLowerCase().includes(".m3u8")) return "live";
   return "movie";
 }
 

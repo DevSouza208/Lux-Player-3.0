@@ -30,7 +30,7 @@ def _kind(title: str, group: str, stream_url: str) -> str:
         return "series"
     if any(token in haystack for token in ("movie", "filme", "vod", "cinema", "film")):
         return "movie"
-    if "live" in haystack or "canal" in haystack or "tv" in haystack or ".m3u8" in stream_url.lower():
+    if "live" in haystack or "canal" in haystack or "canais" in haystack or "tv" in haystack or ".m3u8" in stream_url.lower():
         return "live"
     return "movie"
 

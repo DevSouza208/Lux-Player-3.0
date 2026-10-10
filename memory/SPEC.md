@@ -11,6 +11,7 @@ Perfis, playlists importadas, itens normalizados, Minha lista e progresso de rep
 - Importar arquivo M3U/M3U8/TXT local, URL M3U/M3U8 ou XStream com servidor, usuário e senha.
 - Navegar por Início, Ao vivo, Filmes, Séries e Minha lista; a home mostra hero, Continuar assistindo e rails por categoria.
 - Abrir o player com HLS via hls.js/nativo, fullscreen, volume, velocidade, legendas, picture-in-picture, progresso e próximo episódio.
+- Mídias HTTP, imagens com certificado inválido e manifests HLS passam pelo proxy HTTPS do backend. Streams IPTV MPEG-TS contínuos são remuxados para MP4 fragmentado em navegadores H.264/AAC e transcodificados para WebM VP8/Opus quando esses codecs não estão disponíveis.
 
 ## Dados e limites do MVP
 - `MediaItem` é a unidade normalizada; séries M3U são agrupadas por `group` e identificadores SxxExx.
