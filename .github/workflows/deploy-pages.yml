@@ -43,8 +43,10 @@ jobs:
         working-directory: frontend
         env:
           GITHUB_PAGES: 'true'
-          # Temporary bridge to working IPTV API. Set LUX_API_ORIGIN to your new Docker backend to migrate.
-          VITE_API_ORIGIN: ${{ vars.LUX_API_ORIGIN || 'https://playlist-streamer-10.preview.emergentagent.com' }}
+          # Playlist-only backend while FastAPI Docker isn't deployed.
+          VITE_M3U_GATEWAY_URL: 'https://dntqnwiyelvnukwptosn.supabase.co/functions/v1/lux-playlist-import'
+          # FFmpeg and Xtream still need the standalone backend, when deployed.
+          VITE_API_ORIGIN: ${{ vars.LUX_API_ORIGIN }}
         run: yarn build
       - name: Support SPA routes
         run: |
