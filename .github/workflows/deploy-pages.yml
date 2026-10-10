@@ -43,7 +43,8 @@ jobs:
         working-directory: frontend
         env:
           GITHUB_PAGES: 'true'
-          VITE_API_ORIGIN: ${{ vars.LUX_API_ORIGIN }}
+          # Temporary bridge to working IPTV API. Set LUX_API_ORIGIN to your new Docker backend to migrate.
+          VITE_API_ORIGIN: ${{ vars.LUX_API_ORIGIN || 'https://playlist-streamer-10.preview.emergentagent.com' }}
         run: yarn build
       - name: Support SPA routes
         run: |
