@@ -71,3 +71,22 @@ jobs:
           grep -Eiq 'content-type: video/mp4' /tmp/lux-remux-headers.txt
           head -c 1024 /tmp/lux-remux.mp4 | grep -q 'ftyp'
           echo 'Lux FFmpeg MPEG-TS remux: OK'
+
+      - name: Inspect browser byte-range support for public MP4 VOD
+        run: |
+          set -euo pipefail
+          url='https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4'
+          status=$(curl --silent --show-error --max-time 45 --max-filesize 2097152 \
+            -H 'Origin: https://devsouza208.github.io' \
+            -H 'Range: bytes=0-2047' \
+            -D /tmp/lux-vod-headers.txt \
+            -o /tmp/lux-vod-sample.bin \
+            -w '%{http_code}' \
+            --get --data-urlencode "url=$url" \
+            'https://playlist-streamer-10.preview.emergentagent.com/api/media/proxy')
+          echo "HTTP status: $status"
+          grep -Ei '^(content-type|content-range|accept-ranges|access-control-allow-origin|content-length):' /tmp/lux-vod-headers.txt || true
+          wc -c /tmp/lux-vod-sample.bin
+          test "$status" = 206
+          head -c 512 /tmp/lux-vod-sample.bin | grep -q 'ftyp'
+          echo "Public MP4 VOD proxy Range support: OK"
