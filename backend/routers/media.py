@@ -8,6 +8,7 @@ from urllib.parse import quote, urljoin, urlparse
 
 import httpx
 import imageio_ffmpeg
+from outbound_guard import enforce_request_host
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
 
@@ -63,6 +64,7 @@ async def proxy_media(request: Request, url: str = Query(..., min_length=8)):
     client = httpx.AsyncClient(
         follow_redirects=True,
         verify=False,
+        event_hooks={"request": [enforce_request_host]},
         timeout=httpx.Timeout(30.0, connect=8.0, read=None),
     )
     try:
@@ -127,6 +129,7 @@ async def remux_transport_stream(
     client = httpx.AsyncClient(
         follow_redirects=True,
         verify=False,
+        event_hooks={"request": [enforce_request_host]},
         timeout=httpx.Timeout(30.0, connect=8.0, read=None),
     )
     try:
