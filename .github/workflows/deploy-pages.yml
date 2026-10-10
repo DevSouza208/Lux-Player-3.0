@@ -39,6 +39,12 @@ jobs:
       - name: Install frontend
         working-directory: frontend
         run: yarn install --frozen-lockfile --non-interactive
+      - name: Test watch history and series navigation
+        working-directory: frontend
+        env:
+          DISABLE_VISUAL_EDITS: 'true'
+          DISABLE_EMERGENT_OVERLAY: 'true'
+        run: yarn vitest run src/lib/watchHistory.test.ts
       - name: Build React/Vite for Pages
         working-directory: frontend
         env:
