@@ -1,0 +1,62 @@
+name: Validate new IPTV backend
+
+# Run manually BEFORE changing LUX_API_ORIGIN and exposing a new API to Pages.
+on:
+  workflow_dispatch:
+    inputs:
+      api_origin:
+        description: HTTPS origin for your newly deployed FastAPI (no /api suffix)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      API_ORIGIN: ${{ inputs.api_origin }}
+    steps:
+      - name: Validate HTTPS destination
+        run: |
+          python - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          url = os.environ["API_ORIGIN"].rstrip("/")
+          parsed = urlparse(url)
+          if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in ("", "/"):
+              raise SystemExit("Enter only the HTTPS backend origin, e.g. https://example.onrender.com")
+          print("Valid HTTPS API origin: ", parsed.hostname)
+          PY
+      - name: Check health and configured host allowlist
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail-with-body --max-time 90 \
+            "${API_ORIGIN%/}/api/health" -o /tmp/health.json
+          python - <<'PY'
+          import json
+          with open("/tmp/health.json", encoding="utf-8") as f:
+              health = json.load(f)
+          if health.get("status") != "ok" or not health.get("configured"):
+              raise SystemExit("Backend is unhealthy or LUX_ALLOWED_HOSTS is not configured")
+          print("Lux IPTV backend healthy and allowlist configured")
+          PY
+      - name: Ensure all core routes exist
+        run: |
+          set -euo pipefail
+          for route in playlists/proxy media/proxy media/remux media/vod; do
+            status=$(curl --silent --show-error --max-time 60 -o /dev/null -w '%{http_code}' \
+              "${API_ORIGIN%/}/api/$route")
+            test "$status" = "422" || { echo "$route returned $status, expected 422"; exit 1; }
+            echo "$route: route available"
+          done
+      - name: Check GitHub Pages cross-origin browser access
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 30 -o /dev/null -D /tmp/cors.txt \
+            -H 'Origin: https://devsouza208.github.io' \
+            -H 'Access-Control-Request-Method: GET' \
+            -X OPTIONS "${API_ORIGIN%/}/api/media/vod"
+          grep -iq 'access-control-allow-origin: https://devsouza208.github.io' /tmp/cors.txt
+          echo "CORS for GitHub Pages: OK"
