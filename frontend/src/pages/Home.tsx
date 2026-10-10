@@ -115,7 +115,7 @@ export default function Home() {
 
     <AnimatePresence>{showImport && <ImportCenter onClose={() => setShowImport(false)} onImported={importItems} />}</AnimatePresence>
     <AnimatePresence>{showProfiles && <ProfileGate profiles={state.profiles} initial={false} onSelect={selectProfile} onCreate={createProfile} onClose={() => setShowProfiles(false)} />}</AnimatePresence>
-    <AnimatePresence>{selected && activeProfile && <LuxPlayer item={selected} nextItem={nextEpisode} progress={currentProgress} onClose={() => setSelected(null)} onProgress={updateProgress} onNext={() => { if (nextEpisode) setSelected(nextEpisode); }} />}</AnimatePresence>
+    <AnimatePresence>{selected && activeProfile && <LuxPlayer key={selected.id} item={selected} nextItem={nextEpisode} progress={currentProgress} onClose={() => setSelected(null)} onProgress={updateProgress} onNext={() => { if (nextEpisode) setSelected(nextEpisode); }} />}</AnimatePresence>
     <AnimatePresence>{selectedSeries && activeProfile && <SeriesDetails series={selectedSeries} profileId={activeProfile.id} progress={state.progress} onClose={() => setSelectedSeries(null)} onPlay={play} />}</AnimatePresence>
     {!activeProfile && <ProfileGate profiles={state.profiles} initial onSelect={selectProfile} onCreate={createProfile} />}
   </div>;
