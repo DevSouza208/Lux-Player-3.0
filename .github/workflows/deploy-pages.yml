@@ -49,8 +49,7 @@ jobs:
         working-directory: frontend
         env:
           GITHUB_PAGES: 'true'
-          # Playlist-only backend while FastAPI Docker isn't deployed.
-          VITE_M3U_GATEWAY_URL: 'https://dntqnwiyelvnukwptosn.supabase.co/functions/v1/lux-playlist-import'
+          # M3U import and media proxy use the same independent FastAPI origin.
           # Own FastAPI/FFmpeg server. Do not reference temporary Emergent preview.
           VITE_API_ORIGIN: 'https://lux-player-iptv-api.onrender.com'
           VITE_VOD_API_ORIGIN: 'https://lux-player-iptv-api.onrender.com'
