@@ -76,12 +76,15 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
       ? mediaVodFallbackUrl(item.streamUrl)
       : mediaPlaybackUrl(sourceUrl, sourceExtension, preferWebm);
 
-    // Unknown live transport streams can also retry as MPEG-TS.
-    if (playbackAttempt > 0 && !playHls && !useTsFallback) {
+    // On the last TS attempt, transcode only that channel to browser H.264.
+    // All healthy streams continue using remux without any re-encoding.
+    if (useTsFallback && playbackAttempt >= 2) {
+      playbackUrl = `${API_BASE}/media/remux?url=${encodeURIComponent(sourceUrl)}&output=h264`;
+    } else if (playbackAttempt > 0 && !playHls && !useTsFallback) {
       if (isTransportStream) {
-        playbackUrl = mediaPlaybackUrl(item.streamUrl, item.containerExtension, !preferWebm);
+        playbackUrl = `${API_BASE}/media/remux?url=${encodeURIComponent(item.streamUrl)}&output=h264`;
       } else if (item.kind === "live") {
-        playbackUrl = `${API_BASE}/media/remux?url=${encodeURIComponent(item.streamUrl)}${playbackAttempt === 2 ? "&output=webm" : ""}`;
+        playbackUrl = `${API_BASE}/media/remux?url=${encodeURIComponent(item.streamUrl)}${playbackAttempt === 2 ? "&output=h264" : ""}`;
       }
     }
 
@@ -93,7 +96,7 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
 
     const retryOrFail = (reason: string) => {
       if (disposed) return;
-      const maxRetries = isVod || canUseXtreamTs ? 1 : 2;
+      const maxRetries = isVod || isTransportStream ? 1 : 2;
       if (playbackAttempt < maxRetries) {
         if (isVod) {
           // A 422 here means the route exists but requires a URL.
