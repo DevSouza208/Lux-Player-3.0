@@ -6,6 +6,7 @@ This endpoint deliberately does not support seeking yet; unconverted MP4 seeks
 through the normal byte-range-aware proxy.
 """
 import asyncio
+import shutil
 from contextlib import suppress
 from urllib.parse import urlparse
 
@@ -99,7 +100,7 @@ async def transcode_vod(url: str = Query(..., min_length=8)):
         upstream.raise_for_status()
 
         process = await asyncio.create_subprocess_exec(
-            imageio_ffmpeg.get_ffmpeg_exe(),
+            shutil.which("ffmpeg") or imageio_ffmpeg.get_ffmpeg_exe(),
             *vod_ffmpeg_args(),
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
