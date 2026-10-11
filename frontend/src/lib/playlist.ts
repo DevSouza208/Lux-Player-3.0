@@ -64,9 +64,17 @@ export async function parseM3UStream(stream: ReadableStream<Uint8Array>, playlis
   let pendingAttributes: Record<string, string> = {};
   let pendingTitle = "";
   let truncated = false;
+  let headerSeen = false;
   const consumeLine = (line: string) => {
-    const normalized = line.trim();
+    const normalized = line.replace(/^\uFEFF/, "").trim();
     if (!normalized) return;
+    if (!headerSeen) {
+      if (!normalized.startsWith("#EXTM3U")) {
+        throw new Error("O provedor não enviou uma playlist M3U válida. Verifique a fonte e tente novamente.");
+      }
+      headerSeen = true;
+      return;
+    }
     if (normalized.startsWith("#EXTINF")) {
       pendingAttributes = attributes(normalized);
       pendingTitle = normalized.includes(",") ? normalized.slice(normalized.indexOf(",") + 1).trim() : "";
@@ -94,6 +102,7 @@ export async function parseM3UStream(stream: ReadableStream<Uint8Array>, playlis
     if (truncated) { await reader.cancel(); break; }
     if (result.done) { if (buffer) consumeLine(buffer); break; }
   }
+  if (!headerSeen) throw new Error("A playlist está vazia ou não é um arquivo M3U.");
   return { items, truncated };
 }
 
