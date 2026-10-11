@@ -144,12 +144,12 @@ async def _stream_playlist_url(url: str):
     upstream_chunks = upstream_response.aiter_bytes()
     first_bytes = b""
     try:
-        while len(first_bytes) < 65536 and b"\\n" not in first_bytes:
+        while len(first_bytes) < 65536 and b"\n" not in first_bytes:
             part = await anext(upstream_chunks, b"")
             if not part:
                 break
             first_bytes += part
-        if not first_bytes.lstrip(b"\\xef\\xbb\\xbf \\t\\r\\n").startswith(b"#EXTM3U"):
+        if not first_bytes.lstrip(b"\xef\xbb\xbf \t\r\n").startswith(b"#EXTM3U"):
             raise HTTPException(
                 status_code=502,
                 detail="O provedor devolveu uma resposta inválida, em vez da playlist M3U.",
