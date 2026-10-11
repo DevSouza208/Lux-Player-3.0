@@ -74,3 +74,30 @@ jobs:
             -o /tmp/playlist https://lux-player-iptv-api.onrender.com/api/media/proxy
           grep -q 'https://lux-player-iptv-api.onrender.com/api/media/proxy' /tmp/playlist
           echo 'Render API HLS manifest has absolute backend segment URLs'
+
+      - name: Test browser-compatible MPEG-TS to H264/AAC fallback
+        run: |
+          set -euo pipefail
+          python - <<'PY' > /tmp/lux-public-segment.txt
+          from urllib.parse import urljoin
+          from urllib.request import urlopen
+          root = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
+          def entries(url):
+              text = urlopen(url, timeout=20).read().decode("utf-8-sig")
+              return [x.strip() for x in text.splitlines() if x.strip() and not x.startswith("#")]
+          variant = urljoin(root, entries(root)[0])
+          source = urljoin(variant, entries(variant)[0])
+          if not source.endswith(".ts"):
+              raise SystemExit("Public test stream had no MPEG-TS segment")
+          print(source)
+          PY
+          status=$(curl --silent --show-error --max-time 100 \
+            -D /tmp/ts-h264-headers.txt -o /tmp/ts-h264.mp4 -w '%{http_code}' \
+            --get --data-urlencode "url=$(cat /tmp/lux-public-segment.txt)" \
+            --data-urlencode 'output=h264' \
+            'https://lux-player-iptv-api.onrender.com/api/media/remux')
+          test "$status" = 200 || { echo "H264 fallback HTTP $status"; head -c 500 /tmp/ts-h264.mp4; exit 1; }
+          test "$(wc -c < /tmp/ts-h264.mp4)" -gt 2048
+          head -c 1024 /tmp/ts-h264.mp4 | grep -q 'ftyp'
+          grep -aq 'moof' /tmp/ts-h264.mp4
+          echo 'Live MPEG-TS to browser-compatible H264/AAC fallback: OK'
