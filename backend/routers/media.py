@@ -130,7 +130,7 @@ async def proxy_media(request: Request, url: str = Query(..., min_length=8)):
 @router.get("/remux")
 async def remux_transport_stream(
     url: str = Query(..., min_length=8),
-    output: Literal["mp4", "webm"] = Query("mp4"),
+    output: Literal["mp4", "webm", "h264"] = Query("mp4"),
 ):
     await _validate_public_url(url)
     client = httpx.AsyncClient(
@@ -151,6 +151,24 @@ async def remux_transport_stream(
         raise HTTPException(status_code=502, detail="O provedor recusou o canal") from exc
 
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    # On-demand last resort for TS with HEVC/MPEG2 or other unsupported
+    # codecs. Keep ordinary live TV on the zero-transcode copy path.
+    h264_args = [
+        "-vf", "fps=20,scale=w=-2:h=480",
+        "-c:v", "libx264",
+        "-preset", "ultrafast",
+        "-tune", "zerolatency",
+        "-crf", "30",
+        "-pix_fmt", "yuv420p",
+        "-threads", "2",
+        "-c:a", "aac",
+        "-b:a", "96k",
+        "-ar", "48000",
+        "-ac", "2",
+        "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+        "-f", "mp4",
+        "pipe:1",
+    ]
     output_args = (
         [
             "-c:v",
@@ -180,7 +198,7 @@ async def remux_transport_stream(
             "pipe:1",
         ]
         if output == "webm"
-        else [
+        else h264_args if output == "h264" else [
             "-c",
             "copy",
             "-bsf:a",
@@ -257,7 +275,7 @@ async def remux_transport_stream(
         await client.aclose()
 
     try:
-        first_chunk = await asyncio.wait_for(process.stdout.read(64 * 1024), timeout=22)
+        first_chunk = await asyncio.wait_for(process.stdout.read(64 * 1024), timeout=45 if output == "h264" else 22)
     except TimeoutError as exc:
         await cleanup()
         raise HTTPException(status_code=504, detail="O canal não iniciou a reprodução a tempo") from exc
