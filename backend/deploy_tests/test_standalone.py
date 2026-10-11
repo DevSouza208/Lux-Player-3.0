@@ -72,3 +72,61 @@ async def test_redirect_host_cannot_escape_allowlist(monkeypatch):
         with pytest.raises(HTTPException) as exc:
             await client.get("https://example.com/playlist")
     assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_provider_http_200_json_error_is_not_imported_as_m3u(monkeypatch):
+    from routers import playlists
+
+    class StubClient:
+        closed = False
+
+        def __init__(self, **kwargs):
+            pass
+
+        def build_request(self, method, url):
+            return httpx.Request(method, url)
+
+        async def send(self, req, stream=False):
+            return httpx.Response(
+                200,
+                content=b'{"error":"MySQL: Cannot connect to database!"}',
+                headers={"content-type": "application/json"},
+                request=req,
+            )
+
+        async def aclose(self):
+            self.closed = True
+
+    fake = StubClient()
+    monkeypatch.setattr(playlists.httpx, "AsyncClient", lambda **kwargs: fake)
+    with pytest.raises(HTTPException) as exc:
+        await playlists._stream_playlist_url("https://example.com/catalog.m3u")
+    assert exc.value.status_code == 502
+    assert "MySQL" not in exc.value.detail
+    assert fake.closed is True
+
+
+@pytest.mark.asyncio
+async def test_playlist_streams_valid_m3u_without_entire_file_buffer(monkeypatch):
+    from routers import playlists
+
+    content = b'#EXTM3U\n#EXTINF:-1,A&E\nhttps://example.com/live.m3u8\n'
+
+    class StubClient:
+        def __init__(self, **kwargs):
+            pass
+
+        def build_request(self, method, url):
+            return httpx.Request(method, url)
+
+        async def send(self, req, stream=False):
+            return httpx.Response(200, content=content, request=req)
+
+        async def aclose(self):
+            return None
+
+    monkeypatch.setattr(playlists.httpx, "AsyncClient", StubClient)
+    response = await playlists._stream_playlist_url("https://example.com/catalog.m3u")
+    received = b"".join([chunk async for chunk in response.body_iterator])
+    assert received == content
