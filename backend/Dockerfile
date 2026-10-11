@@ -5,6 +5,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
+# Use the distro's complete, CPU-compatible FFmpeg for MPEG-TS decoding.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 COPY requirements.deploy.txt ./requirements.deploy.txt
 RUN pip install --no-cache-dir -r requirements.deploy.txt
 COPY models ./models
