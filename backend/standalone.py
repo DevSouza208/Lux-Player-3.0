@@ -34,7 +34,8 @@ async def require_allowed_source(request: Request) -> None:
     This is a deployment guard; it does not replace outbound network policy,
     redirect/DNS-rebinding protection, authentication or rate limiting.
     """
-    hosts = {name.strip().lower().strip(".") for name in os.getenv("LUX_ALLOWED_HOSTS", "").split(",") if name.strip()}
+    configured_hosts = ",".join((os.getenv("LUX_ALLOWED_HOSTS", ""), os.getenv("LUX_EXTRA_ALLOWED_HOSTS", "")))
+    hosts = {name.strip().lower().strip(".") for name in configured_hosts.split(",") if name.strip()}
     if not hosts:
         raise HTTPException(status_code=503, detail="API ainda não configurada: LUX_ALLOWED_HOSTS")
 
