@@ -130,3 +130,43 @@ async def test_playlist_streams_valid_m3u_without_entire_file_buffer(monkeypatch
     response = await playlists._stream_playlist_url("https://example.com/catalog.m3u")
     received = b"".join([chunk async for chunk in response.body_iterator])
     assert received == content
+
+@pytest.mark.asyncio
+async def test_extra_allowed_host_is_accepted_by_outbound_guard(monkeypatch):
+    """Direct request must not 403 after standalone accepted the same exact host."""
+    monkeypatch.setenv("LUX_ALLOWED_HOSTS", "example.com")
+    monkeypatch.setenv("LUX_EXTRA_ALLOWED_HOSTS", "cdn.jmvstream.com")
+
+    def fake_getaddrinfo(*args, **kwargs):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("1.1.1.1", 443))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+    checked = []
+    def serve(request: httpx.Request):
+        checked.append(request.url.host)
+        return httpx.Response(200, content=b"ok")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(serve),
+                                 event_hooks={"request": [enforce_request_host]}) as client:
+        response = await client.get("https://cdn.jmvstream.com/playlist.m3u8")
+    assert response.status_code == 200
+    assert checked == ["cdn.jmvstream.com"]
+
+
+@pytest.mark.asyncio
+async def test_extra_host_does_not_allow_unlisted_redirect(monkeypatch):
+    monkeypatch.setenv("LUX_ALLOWED_HOSTS", "example.com")
+    monkeypatch.setenv("LUX_EXTRA_ALLOWED_HOSTS", "cdn.jmvstream.com")
+    def fake_getaddrinfo(*args, **kwargs):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("1.1.1.1", 443))]
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+
+    def redirect(request: httpx.Request):
+        return httpx.Response(302, headers={"location": "https://unapproved.example.net/media"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(redirect),
+                                 follow_redirects=True,
+                                 event_hooks={"request": [enforce_request_host]}) as client:
+        with pytest.raises(HTTPException) as exc:
+            await client.get("https://cdn.jmvstream.com/playlist.m3u8")
+    assert exc.value.status_code == 403
