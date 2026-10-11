@@ -43,6 +43,20 @@ def test_missing_url_keeps_fastapi_validation(monkeypatch):
     assert post_response.status_code == 422
 
 
+def test_post_streaming_m3u_validates_url_and_allowlist(monkeypatch):
+    monkeypatch.delenv("LUX_ALLOWED_HOSTS", raising=False)
+    with TestClient(app) as client:
+        no_config = client.post("/api/playlists/proxy", json={"url": "https://example.com/test.m3u"})
+    assert no_config.status_code == 503
+
+    monkeypatch.setenv("LUX_ALLOWED_HOSTS", "example.com")
+    with TestClient(app) as client:
+        bad_host = client.post("/api/playlists/proxy", json={"url": "http://127.0.0.1:1234/private.m3u"})
+        empty = client.post("/api/playlists/proxy", json={})
+    assert bad_host.status_code == 403
+    assert empty.status_code == 422
+
+
 @pytest.mark.asyncio
 async def test_redirect_host_cannot_escape_allowlist(monkeypatch):
     monkeypatch.setenv("LUX_ALLOWED_HOSTS", "example.com")
