@@ -1,0 +1,47 @@
+name: Verify one public live HLS channel
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/verify-public-live.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  hls:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch one authorized public HLS channel from Render
+        run: |
+          set -euo pipefail
+          API='https://lux-player-iptv-api.onrender.com'
+          SRC='https://cdn.jmvstream.com/w/LVW-8155/ngrp:LVW8155_41E1ciuCvO_all/playlist.m3u8'
+          code=$(curl -sS -L --max-time 90 \
+            -D /tmp/headers -o /tmp/playlist \
+            -w '%{http_code}' -H 'Origin: https://devsouza208.github.io' \
+            --get --data-urlencode "url=$SRC" "$API/api/media/proxy")
+          echo "Render HLS manifest response HTTP $code"
+          test "$code" = 200 || { echo "Unable to load public source manifest"; exit 1; }
+          head -c 7 /tmp/playlist | grep -q '#EXTM3U'
+          grep -q "$API/api/media/proxy" /tmp/playlist
+          grep -iq 'access-control-allow-origin: https://devsouza208.github.io' /tmp/headers
+          echo "Valid playable HLS playlist proxy; source and credentials not logged"
+      - name: Fetch first media playlist or segment safely
+        run: |
+          set -euo pipefail
+          python - <<'PY' > /tmp/firsturl
+          from urllib.parse import urlparse
+          text=open('/tmp/playlist',encoding='utf8').read()
+          entries=[line.strip() for line in text.splitlines() if line.strip() and not line.startswith('#')]
+          if not entries: raise SystemExit('No media entries in manifest')
+          url=entries[0]
+          parsed=urlparse(url)
+          if parsed.hostname!='lux-player-iptv-api.onrender.com':
+              raise SystemExit('Manifest points outside the API')
+          print(url)
+          PY
+          code=$(curl -sS --max-time 50 --max-filesize 2000000 \
+            -D /tmp/segment-headers -o /tmp/segment -w '%{http_code}' \
+            "$(cat /tmp/firsturl)")
+          echo "First HLS child response HTTP $code"
+          test "$code" = 200 || exit 1
+          test "$(wc -c < /tmp/segment)" -gt 128
