@@ -12,6 +12,13 @@ export function mediaProxyUrl(url?: string | null): string | undefined {
   let parsed: URL;
   try { parsed = new URL(url); } catch { return undefined; }
 
+  // These providers have invalid TLS certificates in browsers. Fetch their
+  // artwork through our verified HTTPS relay directly, avoiding image errors.
+  const brokenTlsImageHosts = new Set(["topfont.online", "gstaticcontent.com"]);
+  if (API_ORIGIN && brokenTlsImageHosts.has(parsed.hostname.toLowerCase())) {
+    return proxyPath("proxy", url);
+  }
+
   if (parsed.protocol === "https:") return parsed.toString();
   if (parsed.protocol !== "http:") return undefined;
 
