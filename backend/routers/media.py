@@ -281,6 +281,10 @@ async def remux_transport_stream(
         raise HTTPException(status_code=504, detail="O canal não iniciou a reprodução a tempo") from exc
     if not first_chunk:
         await process.wait()
+        # The stderr collector is scheduled independently from process.wait().
+        # Read its buffered diagnostic before cleanup cancels the task.
+        with suppress(asyncio.CancelledError, TimeoutError):
+            await asyncio.wait_for(stderr_collector, timeout=2)
         error = stderr_tail.decode(errors="replace")[-500:]
         await cleanup()
         raise HTTPException(status_code=502, detail=f"O canal não pôde ser preparado: {error or 'sem dados'}")
