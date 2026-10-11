@@ -15,8 +15,11 @@ from fastapi import HTTPException
 
 
 async def enforce_request_host(request: httpx.Request) -> None:
-    configured = os.getenv("LUX_ALLOWED_HOSTS", "")
-    if not configured.strip():
+    configured = ",".join((
+        os.getenv("LUX_ALLOWED_HOSTS", ""),
+        os.getenv("LUX_EXTRA_ALLOWED_HOSTS", ""),
+    ))
+    if not configured.strip().strip(",").strip():
         return
 
     allowed = {entry.strip().lower().strip(".") for entry in configured.split(",") if entry.strip()}
