@@ -10,6 +10,36 @@ jobs:
   hls:
     runs-on: ubuntu-latest
     steps:
+      - name: Inspect public origin redirects without exposing any signed URLs
+        run: |
+          python - <<'PY'
+          from urllib.request import Request,build_opener,HTTPRedirectHandler
+          from urllib.error import HTTPError,URLError
+          from urllib.parse import urljoin,urlparse
+          class NoRedirect(HTTPRedirectHandler):
+              def redirect_request(self,*args,**kwargs):
+                  return None
+          client=build_opener(NoRedirect)
+          url="https://cdn.jmvstream.com/w/LVW-8155/ngrp:LVW8155_41E1ciuCvO_all/playlist.m3u8"
+          for index in range(4):
+              parsed=urlparse(url)
+              print("Upstream host",index,parsed.hostname)
+              try:
+                  response=client.open(Request(url,headers={"Accept":"application/vnd.apple.mpegurl"}),timeout=12)
+                  code=response.status
+              except HTTPError as err:
+                  response=err
+                  code=err.code
+              except URLError as err:
+                  print("Upstream network unavailable:",err.__class__.__name__)
+                  break
+              location=response.headers.get("location")
+              response.close()
+              if code not in [301,302,303,307,308] or not location:
+                  print("Final upstream HTTP status",code)
+                  break
+              url=urljoin(url,location)
+          PY
       - name: Fetch one authorized public HLS channel from Render
         run: |
           set -euo pipefail
