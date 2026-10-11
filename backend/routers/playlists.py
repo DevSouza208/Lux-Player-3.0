@@ -138,10 +138,32 @@ async def _stream_playlist_url(url: str):
         await client.aclose()
         raise HTTPException(status_code=502, detail="O provedor não conseguiu entregar a playlist.") from exc
 
+    # The provider sometimes returns HTTP 200 + JSON with a database error.
+    # Peek only at the start of the response before telling the client it is
+    # a valid M3U. Never fetch or buffer the entire large playlist.
+    upstream_chunks = upstream_response.aiter_bytes()
+    first_bytes = b""
+    try:
+        while len(first_bytes) < 65536 and b"\\n" not in first_bytes:
+            part = await anext(upstream_chunks, b"")
+            if not part:
+                break
+            first_bytes += part
+        if not first_bytes.lstrip(b"\\xef\\xbb\\xbf \\t\\r\\n").startswith(b"#EXTM3U"):
+            raise HTTPException(
+                status_code=502,
+                detail="O provedor devolveu uma resposta inválida, em vez da playlist M3U.",
+            )
+    except Exception:
+        await upstream_response.aclose()
+        await client.aclose()
+        raise
+
     async def stream_playlist():
         try:
-            received = 0
-            async for chunk in upstream_response.aiter_bytes():
+            received = len(first_bytes)
+            yield first_bytes
+            async for chunk in upstream_chunks:
                 received += len(chunk)
                 if received > MAX_PLAYLIST_BYTES:
                     break
