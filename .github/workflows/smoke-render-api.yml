@@ -28,6 +28,21 @@ jobs:
             -H 'Origin: https://devsouza208.github.io' \
             -H 'Access-Control-Request-Method: GET' "$host/api/media/vod"
           grep -iq 'access-control-allow-origin: https://devsouza208.github.io' /tmp/cors
+      - name: Test POST playlist import (streaming, no URL credentials in log)
+        run: |
+          set -euo pipefail
+          status=$(curl --silent --show-error --max-time 80 --fail-with-body \
+            -D /tmp/m3u-headers.txt \
+            -o /tmp/public-test.m3u \
+            -w '%{http_code}' \
+            -H 'Origin: https://devsouza208.github.io' \
+            -H 'Content-Type: application/json' \
+            --data '{"url":"https://raw.githubusercontent.com/iptv-org/iptv/master/streams/br.m3u"}' \
+            'https://lux-player-iptv-api.onrender.com/api/playlists/proxy')
+          test "$status" = "200" || { echo "Streaming import failed HTTP $status"; exit 1; }
+          head -c 7 /tmp/public-test.m3u | grep -q '^#EXTM3U'
+          grep -iq 'access-control-allow-origin: https://devsouza208.github.io' /tmp/m3u-headers.txt
+          echo "POST streaming import and CORS: OK"
       - name: Test proxied public MP4 byte ranges
         run: |
           set -euo pipefail
