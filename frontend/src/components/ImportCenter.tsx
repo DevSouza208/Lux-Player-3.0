@@ -33,8 +33,15 @@ export default function ImportCenter({ onClose, onImported }: ImportCenterProps)
   };
 
   const urlImport = useMutation({
-    mutationFn: () => importRemotePlaylist(url.trim()),
-    onSuccess: async (stream) => { const playlistId = createLocalId("playlist"); const parsed = await parseM3UStream(stream, playlistId); finish(parsed.items, name || "Playlist remota", "url"); if (parsed.truncated) toast.warning("A fonte ultrapassou 500.000 itens; importamos esse limite de segurança."); },
+    mutationFn: async () => {
+      const playlistId = createLocalId("playlist");
+      const stream = await importRemotePlaylist(url.trim());
+      return parseM3UStream(stream, playlistId);
+    },
+    onSuccess: (parsed) => {
+      finish(parsed.items, name || "Playlist remota", "url");
+      if (parsed.truncated) toast.warning("A fonte ultrapassou 500.000 itens; importamos esse limite de segurança.");
+    },
     onError: (mutationError: Error) => setError(mutationError.message || "Não foi possível carregar essa URL."),
   });
   const xstreamImport = useMutation({
