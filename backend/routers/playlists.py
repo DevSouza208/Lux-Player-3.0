@@ -6,6 +6,7 @@ from uuid import uuid4
 import httpx
 from outbound_guard import enforce_request_host
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 from fastapi.responses import StreamingResponse
 
 from models.playlist import PlaylistItem, PlaylistParseResult, PlaylistUrlRequest
@@ -107,8 +108,23 @@ async def _xstream_request(client: httpx.AsyncClient, base: str, username: str, 
     return payload if isinstance(payload, (dict, list)) else {}
 
 
+class M3UStreamRequest(BaseModel):
+    url: str = Field(..., min_length=8)
+
+
 @router.get("/proxy")
 async def proxy_m3u(url: str = Query(..., min_length=8)):
+    # Retain compatibility with clients already importing by GET.
+    return await _stream_playlist_url(url)
+
+
+@router.post("/proxy")
+async def proxy_m3u_post(request: M3UStreamRequest):
+    # Keep provider credentials out of the URL of the API request.
+    return await _stream_playlist_url(request.url)
+
+
+async def _stream_playlist_url(url: str):
     timeout = httpx.Timeout(75.0, connect=10.0)
     client = httpx.AsyncClient(follow_redirects=True, timeout=timeout, event_hooks={"request": [enforce_request_host]})
     try:
@@ -120,7 +136,7 @@ async def proxy_m3u(url: str = Query(..., min_length=8)):
         raise HTTPException(status_code=408, detail="O servidor da playlist demorou demais para responder") from exc
     except httpx.HTTPError as exc:
         await client.aclose()
-        raise HTTPException(status_code=400, detail=f"Não foi possível carregar a playlist: {exc}") from exc
+        raise HTTPException(status_code=502, detail="O provedor não conseguiu entregar a playlist.") from exc
 
     async def stream_playlist():
         try:
