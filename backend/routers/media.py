@@ -3,6 +3,7 @@ import ipaddress
 import os
 import re
 import socket
+import shutil
 from contextlib import suppress
 from typing import Literal
 from urllib.parse import quote, urljoin, urlparse
@@ -150,7 +151,7 @@ async def remux_transport_stream(
         await client.aclose()
         raise HTTPException(status_code=502, detail="O provedor recusou o canal") from exc
 
-    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    ffmpeg = shutil.which("ffmpeg") or imageio_ffmpeg.get_ffmpeg_exe()
     # On-demand last resort for TS with HEVC/MPEG2 or other unsupported
     # codecs. Keep ordinary live TV on the zero-transcode copy path.
     h264_args = [
