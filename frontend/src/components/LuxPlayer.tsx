@@ -55,15 +55,29 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
     const isTransportStream = path.endsWith(".ts") || item.containerExtension?.toLowerCase() === "ts";
     const isVod = item.kind !== "live";
     const preferWebm = video.canPlayType('video/mp4; codecs="avc1.640028, mp4a.40.2"') === "";
-    // Regular MP4/WebM goes through the byte-range-aware proxy. Only VOD that
-    // fails decoding retries via the NEW server-side MKV/HEVC transcoder.
+
+    // Xtream live lists can advertise both HLS and continuous MPEG-TS.
+    // If the CDN refuses HLS segments (often token-bound), retry the SAME
+    // stream ID as .ts. This is a byte-stream remux, not a full download.
+    const canUseXtreamTs = item.kind === "live"
+      && isHls && /\/live\/[^/]+\/[^/]+\/\d+\.m3u8$/i.test(path);
+    const useTsFallback = canUseXtreamTs && playbackAttempt > 0;
+    const playHls = isHls && !useTsFallback;
+    let sourceUrl = item.streamUrl;
+    let sourceExtension = item.containerExtension;
+    if (useTsFallback) {
+      const backupUrl = new URL(item.streamUrl);
+      backupUrl.pathname = backupUrl.pathname.replace(/\.m3u8$/i, ".ts");
+      sourceUrl = backupUrl.toString();
+      sourceExtension = "ts";
+    }
+    // Native/Range MP4 first; transcode incompatible VOD only as fallback.
     let playbackUrl = isVod && playbackAttempt > 0
       ? mediaVodFallbackUrl(item.streamUrl)
-      : mediaPlaybackUrl(item.streamUrl, item.containerExtension, preferWebm);
+      : mediaPlaybackUrl(sourceUrl, sourceExtension, preferWebm);
 
-    // Some providers expose transport streams through URLs without a .ts suffix.
-    // If the initial proxy stalls, retry using FFmpeg, which already works in Emergent.
-    if (playbackAttempt > 0 && !isHls) {
+    // Unknown live transport streams can also retry as MPEG-TS.
+    if (playbackAttempt > 0 && !playHls && !useTsFallback) {
       if (isTransportStream) {
         playbackUrl = mediaPlaybackUrl(item.streamUrl, item.containerExtension, !preferWebm);
       } else if (item.kind === "live") {
@@ -79,7 +93,7 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
 
     const retryOrFail = (reason: string) => {
       if (disposed) return;
-      const maxRetries = isVod ? 1 : 2;
+      const maxRetries = isVod || canUseXtreamTs ? 1 : 2;
       if (playbackAttempt < maxRetries) {
         if (isVod) {
           // A 422 here means the route exists but requires a URL.
@@ -192,7 +206,7 @@ export default function LuxPlayer({ item, nextItem, progress, onClose, onProgres
     video.preload = "auto";
     video.volume = volume;
     video.muted = muted;
-    if (isHls && Hls.isSupported()) {
+    if (playHls && Hls.isSupported()) {
       hls = new Hls({ enableWorker: true, lowLatencyMode: true });
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) {
