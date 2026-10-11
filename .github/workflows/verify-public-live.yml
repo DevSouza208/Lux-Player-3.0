@@ -20,7 +20,19 @@ jobs:
             -w '%{http_code}' -H 'Origin: https://devsouza208.github.io' \
             --get --data-urlencode "url=$SRC" "$API/api/media/proxy")
           echo "Render HLS manifest response HTTP $code"
-          test "$code" = 200 || { echo "Unable to load public source manifest"; exit 1; }
+          if [ "$code" != 200 ]; then
+            python - <<'PY'
+          import json
+          try:
+              with open('/tmp/playlist',encoding='utf-8') as f:
+                  info=json.load(f)
+              detail=str(info.get('detail',info.get('error','No detail')))[:250]
+              print('Backend diagnostic:',detail)
+          except (OSError,ValueError,TypeError):
+              print('Backend diagnostic: non-JSON upstream response')
+          PY
+            exit 1
+          fi
           head -c 7 /tmp/playlist | grep -q '#EXTM3U'
           grep -q "$API/api/media/proxy" /tmp/playlist
           grep -iq 'access-control-allow-origin: https://devsouza208.github.io' /tmp/headers
